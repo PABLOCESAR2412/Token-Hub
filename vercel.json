@@ -1,0 +1,13 @@
+{
+  "crons": [
+    {
+      "path": "/api/cron/poll-usage",
+      "schedule": "0 */6 * * *"
+    }
+  ],
+  "functions": {
+    "api/cron/poll-usage.ts": {
+      "maxDuration": 30
+    }
+  }
+}

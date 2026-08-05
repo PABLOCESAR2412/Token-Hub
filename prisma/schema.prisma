@@ -1,0 +1,40 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Provider {
+  id        String   @id @default(uuid())
+  name      String   @unique // e.g. "OpenAI", "Anthropic"
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  tokens    Token[]
+}
+
+model Token {
+  id             String          @id @default(uuid())
+  name           String          // e.g. "Dev Agent Token"
+  encryptedValue String          // The encrypted API Key
+  quota          Int             @default(0) // 0 means unlimited
+  totalCost      Float           @default(0.0)
+  createdAt      DateTime        @default(now())
+  updatedAt      DateTime        @updatedAt
+
+  providerId     String
+  provider       Provider        @relation(fields: [providerId], references: [id])
+  
+  snapshots      UsageSnapshot[]
+}
+
+model UsageSnapshot {
+  id        String   @id @default(uuid())
+  tokenId   String
+  token     Token    @relation(fields: [tokenId], references: [id])
+  tokensUsed Int
+  cost       Float
+  timestamp  DateTime @default(now())
+}

@@ -1,0 +1,13 @@
+@import "tailwindcss";
+
+@theme {
+  --color-zinc-950: #09090b;
+  --color-zinc-50: #fafafa;
+}
+
+/* Custom dark mode utilities inspired by Linear/Vercel */
+body {
+  background-color: var(--color-zinc-950);
+  color: var(--color-zinc-50);
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+}
