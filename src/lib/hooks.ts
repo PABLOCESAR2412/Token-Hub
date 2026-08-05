@@ -1,9 +1,12 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { loadAdapter } from "../lib/storage-adapter";
 import type { CreateTokenInput, UpdateTokenInput } from "../lib/types";
-import * as fns from "../server/tokens";
 
 const isDemo = process.env.APP_MODE === "demo";
+
+async function getServerFns() {
+  return await import("../server/tokens");
+}
 
 export function useTokens() {
   return useQuery({
@@ -13,6 +16,7 @@ export function useTokens() {
         const adapter = await loadAdapter();
         return await adapter.getTokens();
       }
+      const fns = await getServerFns();
       return await fns.getTokens();
     },
   });
@@ -27,6 +31,7 @@ export function useToken(id: string | undefined) {
         const adapter = await loadAdapter();
         return await adapter.getToken(id);
       }
+      const fns = await getServerFns();
       return await fns.getToken({ data: id });
     },
     enabled: !!id,
@@ -41,6 +46,7 @@ export function useAddToken() {
         const adapter = await loadAdapter();
         return await adapter.addToken(input);
       }
+      const fns = await getServerFns();
       return await fns.addToken({ data: input });
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: ["tokens"] }),
@@ -55,6 +61,7 @@ export function useUpdateToken() {
         const adapter = await loadAdapter();
         return await adapter.updateToken(input);
       }
+      const fns = await getServerFns();
       return await fns.updateToken({ data: input });
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: ["tokens"] }),
@@ -69,6 +76,7 @@ export function useDeleteToken() {
         const adapter = await loadAdapter();
         return await adapter.deleteToken(id);
       }
+      const fns = await getServerFns();
       return await fns.deleteToken({ data: id });
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: ["tokens"] }),
@@ -84,6 +92,7 @@ export function useSnapshots(tokenId: string | undefined) {
         const adapter = await loadAdapter();
         return await adapter.getSnapshots(tokenId);
       }
+      const fns = await getServerFns();
       return await fns.getSnapshots({ data: tokenId });
     },
     enabled: !!tokenId,

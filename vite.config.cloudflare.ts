@@ -28,5 +28,8 @@ export default defineConfig({
   build: {
     outDir: "dist/client",
     emptyOutDir: true,
+    rollupOptions: {
+      external: ["@prisma/client", "@tanstack/react-start"],
+    },
   },
 });
