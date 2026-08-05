@@ -18,7 +18,7 @@ export default defineConfig({
   ],
   resolve: {
     alias: {
-      "~": path.resolve(__dirname, "./src"),
+      "~": path.resolve(import.meta.dirname, "./src"),
     },
   },
   define: {
@@ -29,6 +29,7 @@ export default defineConfig({
     outDir: "dist/client",
     emptyOutDir: true,
     rollupOptions: {
+      input: "index.spa.html",
       external: ["@prisma/client", "@tanstack/react-start"],
     },
   },

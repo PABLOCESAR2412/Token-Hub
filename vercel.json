@@ -1,8 +1,5 @@
 {
-  "crons": [
-    {
-      "path": "/api/cron/poll-usage",
-      "schedule": "0 0 * * *"
-    }
+  "rewrites": [
+    { "source": "/((?!assets/).*)", "destination": "/index.html" }
   ]
 }

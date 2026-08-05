@@ -1,24 +1,35 @@
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
 import tailwindcss from "@tailwindcss/vite";
-import { tanstackStart } from "@tanstack/react-start/plugin/vite";
-import { nitro } from "nitro/vite";
+import { TanStackRouterVite } from "@tanstack/router-plugin/vite";
+import path from "path";
 
-// Full-stack build for Vercel (SSR + server functions + cron)
+// SPA build for Vercel (demo mode, localStorage)
 export default defineConfig({
   plugins: [
-    tanstackStart(),
-    nitro({ preset: "vercel" }),
+    TanStackRouterVite({
+      target: "react",
+      autoCodeSplitting: true,
+      routesDirectory: "./src/routes",
+      generatedRouteTree: "./src/routeTree.gen.ts",
+    }),
     react(),
     tailwindcss(),
   ],
   resolve: {
     alias: {
-      "~": new URL("./src", import.meta.url).pathname,
+      "~": path.resolve(import.meta.dirname, "./src"),
     },
   },
   define: {
-    "process.env.APP_MODE": JSON.stringify(process.env.APP_MODE || "production"),
-    "process.env.APP_STORAGE": JSON.stringify(process.env.APP_STORAGE || "local"),
+    "process.env.APP_MODE": JSON.stringify("demo"),
+    "process.env.APP_STORAGE": JSON.stringify("local"),
+  },
+  build: {
+    outDir: "dist",
+    emptyOutDir: true,
+    rollupOptions: {
+      input: "index.spa.html",
+    },
   },
 });

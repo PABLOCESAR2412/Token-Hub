@@ -7,8 +7,8 @@
     "dev": "bun run --bun vite dev",
     "build": "bun run --bun vite build",
     "build:cloudflare": "bun run --bun vite build --config vite.config.cloudflare.ts",
-    "preview": "bun run --bun vite preview",
-    "start": "node .output/server/index.mjs"
+    "build:vercel": "bun run --bun vite build",
+    "preview": "bun run --bun vite preview"
   },
   "devDependencies": {
     "@types/bun": "latest",
