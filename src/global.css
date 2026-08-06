@@ -1,13 +1,38 @@
 @import "tailwindcss";
 
 @theme {
-  --color-zinc-950: #09090b;
-  --color-zinc-50: #fafafa;
+  --color-bone: #f4f1ea;
+  --color-stone: #1a1a1a;
+  --color-pure: #000000;
+  --color-electric: #0055ff;
+  --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, "SF Mono", Menlo, monospace;
 }
 
-/* Custom dark mode utilities inspired by Linear/Vercel */
 body {
-  background-color: var(--color-zinc-950);
-  color: var(--color-zinc-50);
-  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  background-color: var(--color-stone);
+  color: var(--color-bone);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  position: relative;
+  background-image: radial-gradient(rgba(244, 241, 234, 0.18) 1.5px, transparent 1.5px);
+  background-size: 14px 14px;
+}
+
+body::after {
+  content: "";
+  position: fixed;
+  inset: 0;
+  width: 100vw;
+  height: 100vh;
+  pointer-events: none;
+  z-index: 60;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.8' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)' opacity='0.06'/%3E%3C/svg%3E");
+  mix-blend-mode: overlay;
+}
+
+::selection {
+  background-color: var(--color-electric);
+  color: var(--color-bone);
 }

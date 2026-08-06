@@ -29,7 +29,7 @@ export default defineConfig({
     outDir: "dist",
     emptyOutDir: true,
     rollupOptions: {
-      input: "index.spa.html",
+      input: "index.html",
     },
   },
 });
