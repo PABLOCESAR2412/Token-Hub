@@ -1,6 +1,7 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { createRootRoute, Outlet } from "@tanstack/react-router";
 import * as React from "react";
+import { Logo } from "../components/Logo";
 import "../global.css";
 
 const queryClient = new QueryClient({
@@ -22,12 +23,10 @@ function RootComponent() {
       <div className="min-h-screen flex flex-col">
         <header className="border-b border-bone/20 px-6 lg:px-8 py-5 flex items-center justify-between sticky top-0 z-50 bg-stone/90 backdrop-blur">
           <div className="flex items-center gap-4">
-            <p className="font-mono text-sm font-bold uppercase tracking-tight">
+            <Logo className="w-9 h-9 shrink-0" />
+            <p className="font-sans font-black text-xl sm:text-2xl uppercase tracking-tight leading-none">
               Agent <span className="text-electric">Token Hub</span>
             </p>
-            <span className="font-mono text-xs text-bone/40 uppercase hidden sm:inline">
-              Token SYS v001
-            </span>
           </div>
           <div className="flex items-center gap-6 font-mono text-xs uppercase">
             <span className="hidden md:flex items-center gap-2">
@@ -43,9 +42,20 @@ function RootComponent() {
         <main className="flex-1 w-full max-w-[1440px] mx-auto px-6 lg:px-8 py-8 lg:py-12 min-w-0">
           <Outlet />
         </main>
-        <footer className="border-t border-bone/20 px-6 lg:px-8 py-4">
+        <footer className="border-t border-bone/20 px-6 lg:px-8 py-5 flex flex-col sm:flex-row items-center justify-between gap-2">
           <p className="font-mono text-xs text-bone/40 uppercase tracking-widest">
-            TOKEN SYS // DATA STREAM
+            Hecho por{" "}
+            <a
+              href="https://porfolio-pablo-torres.vercel.app/"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-electric hover:underline"
+            >
+              Pablo Torres
+            </a>
+          </p>
+          <p className="font-mono text-xs text-bone/40 uppercase tracking-widest">
+            © {new Date().getFullYear()} Agent Token Hub // Todos los derechos reservados
           </p>
         </footer>
       </div>
