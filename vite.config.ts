@@ -1,35 +1,39 @@
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
 import tailwindcss from "@tailwindcss/vite";
-import { TanStackRouterVite } from "@tanstack/router-plugin/vite";
+import { tanstackStart } from "@tanstack/react-start/plugin/vite";
+import { nitro } from "nitro/vite";
 import path from "path";
+import { fileURLToPath } from "url";
 
-// SPA build for Vercel (demo mode, localStorage)
-export default defineConfig({
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+
+// SSR build for Vercel (production mode, Supabase storage, Nitro).
+export default defineConfig(() => ({
   plugins: [
-    TanStackRouterVite({
-      target: "react",
-      autoCodeSplitting: true,
-      routesDirectory: "./src/routes",
-      generatedRouteTree: "./src/routeTree.gen.ts",
+    tanstackStart({
+      client: { entry: "./client-ssr" },
     }),
     react(),
     tailwindcss(),
+    nitro({
+      preset: process.env.VERCEL ? "vercel" : "node-server",
+      renderer: false,
+    }),
   ],
+  environments: {
+    ssr: { build: { rollupOptions: { input: "./server.ts" } } },
+  },
   resolve: {
     alias: {
-      "~": path.resolve(import.meta.dirname, "./src"),
+      "~": path.resolve(__dirname, "./src"),
     },
   },
   define: {
-    "process.env.APP_MODE": JSON.stringify("demo"),
-    "process.env.APP_STORAGE": JSON.stringify("local"),
+    "process.env.APP_MODE": JSON.stringify("production"),
+    "process.env.APP_STORAGE": JSON.stringify("supabase"),
   },
-  build: {
-    outDir: "dist",
-    emptyOutDir: true,
-    rollupOptions: {
-      input: "index.html",
-    },
+  css: {
+    preprocessorOptions: {},
   },
-});
+}));

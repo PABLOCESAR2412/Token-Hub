@@ -1,4 +1,5 @@
-import type { StorageAdapter, Token, UsageSnapshot, TokenWithUsage, CreateTokenInput, UpdateTokenInput } from "../types";
+import type { StorageAdapter, Token, UsageSnapshot, TokenWithUsage, CreateTokenInput, UpdateTokenInput, UsageSnapshotInput } from "./index";
+import { hashRevealSecret, verifyRevealSecret } from "../reveal";
 
 const TOKENS_KEY = "ath_tokens";
 const SNAPSHOTS_KEY = "ath_snapshots";
@@ -18,6 +19,7 @@ const SEED_TOKENS: Token[] = [
     quota: 10000,
     totalCost: 247.83,
     createdAt: "2026-01-15T10:30:00.000Z",
+    hasRevealSecret: false,
   },
   {
     id: "tok_002",
@@ -28,6 +30,7 @@ const SEED_TOKENS: Token[] = [
     quota: 5000,
     totalCost: 89.12,
     createdAt: "2026-02-03T14:20:00.000Z",
+    hasRevealSecret: false,
   },
   {
     id: "tok_003",
@@ -38,6 +41,7 @@ const SEED_TOKENS: Token[] = [
     quota: 0,
     totalCost: 12.40,
     createdAt: "2026-03-01T08:15:00.000Z",
+    hasRevealSecret: false,
   },
 ];
 
@@ -112,6 +116,8 @@ export const localAdapter: StorageAdapter = {
       quota: input.quota,
       totalCost: 0,
       createdAt: new Date().toISOString(),
+      hasRevealSecret: !!input.revealSecret,
+      ...(input.revealSecret ? { revealSecretHash: hashRevealSecret(input.revealSecret) } : {}),
     };
     tokens.push(newToken);
     localStorage.setItem(TOKENS_KEY, JSON.stringify(tokens));
@@ -128,6 +134,10 @@ export const localAdapter: StorageAdapter = {
     if (input.apiKey !== undefined) {
       tokens[idx].encryptedValue = "enc_" + input.apiKey;
       tokens[idx].maskedValue = maskKey(input.apiKey);
+    }
+    if (input.revealSecret !== undefined) {
+      tokens[idx].revealSecretHash = hashRevealSecret(input.revealSecret);
+      tokens[idx].hasRevealSecret = true;
     }
     localStorage.setItem(TOKENS_KEY, JSON.stringify(tokens));
     return tokens[idx];
@@ -146,13 +156,19 @@ export const localAdapter: StorageAdapter = {
     return snaps.filter((s) => s.tokenId === tokenId);
   },
 
-  addSnapshot: async (tokenId: string, tokensUsed: number, cost: number) => {
+  addSnapshot: async (tokenId: string, usage: UsageSnapshotInput) => {
     const snaps: UsageSnapshot[] = JSON.parse(localStorage.getItem(SNAPSHOTS_KEY) || "[]");
     const snap: UsageSnapshot = {
       id: "snap_" + crypto.randomUUID().slice(0, 8),
       tokenId,
-      tokensUsed,
-      cost,
+      tokensUsed: usage.tokensUsed,
+      cost: usage.cost,
+      model: usage.model ?? null,
+      inputTokens: usage.inputTokens ?? 0,
+      outputTokens: usage.outputTokens ?? 0,
+      latencyMs: usage.latencyMs ?? null,
+      tokensPerSecond: usage.tokensPerSecond ?? null,
+      provider: usage.provider ?? null,
       timestamp: new Date().toISOString(),
     };
     snaps.push(snap);
@@ -161,9 +177,19 @@ export const localAdapter: StorageAdapter = {
     const tokens: Token[] = JSON.parse(localStorage.getItem(TOKENS_KEY) || "[]");
     const idx = tokens.findIndex((t) => t.id === tokenId);
     if (idx !== -1) {
-      tokens[idx].totalCost += cost;
+      tokens[idx].totalCost += usage.cost;
       localStorage.setItem(TOKENS_KEY, JSON.stringify(tokens));
     }
     return snap;
+  },
+
+  revealToken: async (tokenId: string, revealSecret: string) => {
+    const tokens: Token[] = JSON.parse(localStorage.getItem(TOKENS_KEY) || "[]");
+    const token = tokens.find((t) => t.id === tokenId);
+    if (!token) return { ok: false, error: "Token no encontrado" };
+    if (!verifyRevealSecret(revealSecret, token.revealSecretHash)) {
+      return { ok: false, error: "// Clave incorrecta" };
+    }
+    return { ok: true, key: token.encryptedValue.replace(/^enc_/, "") };
   },
 };

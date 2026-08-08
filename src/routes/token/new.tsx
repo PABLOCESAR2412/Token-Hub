@@ -12,9 +12,10 @@ function TokenForm() {
   const addToken = useAddToken();
   const [form, setForm] = React.useState({
     name: "",
-    provider: "openai",
+    provider: "openrouter",
     apiKey: "",
     quota: 0,
+    revealSecret: "",
   });
   const [error, setError] = React.useState("");
 
@@ -24,10 +25,19 @@ function TokenForm() {
       setError("// ERROR: Nombre y API Key son obligatorios");
       return;
     }
-    addToken.mutate(form, {
-      onSuccess: () => navigate({ to: "/" }),
-      onError: (err) => setError(err.message),
-    });
+    addToken.mutate(
+      {
+        name: form.name,
+        provider: form.provider,
+        apiKey: form.apiKey,
+        quota: form.quota,
+        ...(form.revealSecret.trim() ? { revealSecret: form.revealSecret } : {}),
+      },
+      {
+        onSuccess: () => navigate({ to: "/" }),
+        onError: (err) => setError(err.message),
+      }
+    );
   };
 
   const inputClass =
@@ -75,6 +85,7 @@ function TokenForm() {
             onChange={(e) => setForm({ ...form, provider: e.target.value })}
             className={inputClass + " uppercase"}
           >
+            <option value="openrouter">OpenRouter</option>
             <option value="openai">OpenAI</option>
             <option value="anthropic">Anthropic</option>
             <option value="google">Google</option>
@@ -107,6 +118,22 @@ function TokenForm() {
             onChange={(e) => setForm({ ...form, quota: parseInt(e.target.value) || 0 })}
             className={inputClass}
           />
+        </div>
+
+        <div>
+          <label className="block font-mono text-xs uppercase text-bone/50 mb-2">
+            [ Clave para ver (opcional) ]
+          </label>
+          <input
+            type="password"
+            value={form.revealSecret}
+            onChange={(e) => setForm({ ...form, revealSecret: e.target.value })}
+            placeholder="Con esta clave podrás mostrar la key por 10s"
+            className={inputClass}
+          />
+          <p className="font-mono text-xs text-bone/40 mt-1.5">
+            {"> se guarda hasheada y solo sirve para revelar la key con temporizador"}
+          </p>
         </div>
 
         <button

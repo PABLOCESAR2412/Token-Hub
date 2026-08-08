@@ -30,7 +30,12 @@ export default defineConfig({
     emptyOutDir: true,
     rollupOptions: {
       input: "index.html",
-      external: ["@prisma/client", "@tanstack/react-start"],
+      external: [
+        "@prisma/client",
+        "@tanstack/react-start",
+        "@tanstack/react-start/server",
+        "@tanstack/start-server-core",
+      ],
     },
   },
 });

@@ -3,38 +3,49 @@ generator client {
 }
 
 datasource db {
-  provider = "postgresql"
-  url      = env("DATABASE_URL")
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
 }
 
 model Provider {
   id        String   @id @default(uuid())
   name      String   @unique // e.g. "OpenAI", "Anthropic"
+  slug      String   @unique // e.g. "openai", "anthropic"
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
   tokens    Token[]
 }
 
 model Token {
-  id             String          @id @default(uuid())
-  name           String          // e.g. "Dev Agent Token"
-  encryptedValue String          // The encrypted API Key
-  quota          Int             @default(0) // 0 means unlimited
-  totalCost      Float           @default(0.0)
-  createdAt      DateTime        @default(now())
-  updatedAt      DateTime        @updatedAt
+  id               String    @id @default(uuid())
+  name             String // e.g. "Dev Agent Token"
+  slug             String    @unique
+  encryptedValue   String // The encrypted API Key
+  quota            Int       @default(0) // 0 means unlimited
+  totalCost        Float     @default(0.0)
+  revealSecretHash String? // Optional scrypt hash for showing the raw key
+  resetAt          DateTime? // Next quota reset date when the provider exposes it
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
 
-  providerId     String
-  provider       Provider        @relation(fields: [providerId], references: [id])
-  
-  snapshots      UsageSnapshot[]
+  providerId String
+  provider   Provider @relation(fields: [providerId], references: [id])
+
+  snapshots UsageSnapshot[]
 }
 
 model UsageSnapshot {
-  id        String   @id @default(uuid())
-  tokenId   String
-  token     Token    @relation(fields: [tokenId], references: [id])
-  tokensUsed Int
-  cost       Float
-  timestamp  DateTime @default(now())
+  id              String   @id @default(uuid())
+  tokenId         String
+  token           Token    @relation(fields: [tokenId], references: [id])
+  tokensUsed      Int
+  cost            Float
+  model           String? // e.g. "anthropic/claude-3.5-sonnet"
+  inputTokens     Int      @default(0)
+  outputTokens    Int      @default(0)
+  latencyMs       Int? // request latency
+  tokensPerSecond Float? // output tokens per second
+  provider        String?
+  timestamp       DateTime @default(now())
 }

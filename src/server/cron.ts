@@ -20,7 +20,11 @@ export const pollUsage = createServerFn({ method: "POST" })
       try {
         const usage = await providerAdapter.fetchUsage(token.encryptedValue);
         if (usage.tokensUsed > 0 || usage.cost > 0) {
-          await adapter.addSnapshot(token.id, usage.tokensUsed, usage.cost);
+          await adapter.addSnapshot(token.id, {
+            tokensUsed: usage.tokensUsed,
+            cost: usage.cost,
+            model: null,
+          });
           results.push({ tokenId: token.id, provider: token.provider, success: true });
         } else {
           results.push({ tokenId: token.id, provider: token.provider, success: false, error: "No usage data" });

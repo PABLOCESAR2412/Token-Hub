@@ -98,3 +98,16 @@ export function useSnapshots(tokenId: string | undefined) {
     enabled: !!tokenId,
   });
 }
+
+export function useRevealToken() {
+  return useMutation({
+    mutationFn: async (input: { tokenId: string; revealSecret: string }) => {
+      if (isDemo) {
+        const adapter = await loadAdapter();
+        return await adapter.revealToken(input.tokenId, input.revealSecret);
+      }
+      const fns = await getServerFns();
+      return await fns.revealToken({ data: input });
+    },
+  });
+}

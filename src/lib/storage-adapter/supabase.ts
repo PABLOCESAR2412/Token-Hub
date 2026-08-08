@@ -1,12 +1,23 @@
 import { PrismaClient } from "@prisma/client";
 import { encrypt, decrypt } from "../crypto";
-import type { StorageAdapter, Token, UsageSnapshot, TokenWithUsage, CreateTokenInput, UpdateTokenInput } from "../types";
+import { hashRevealSecret, verifyRevealSecret } from "../reveal";
+import type { StorageAdapter, Token, UsageSnapshot, TokenWithUsage, CreateTokenInput, UpdateTokenInput, UsageSnapshotInput } from "../types";
 
 const prisma = new PrismaClient();
 
 function maskKey(raw: string): string {
   if (raw.length <= 8) return "sk-***";
   return raw.slice(0, 3) + "..." + raw.slice(-4);
+}
+
+function slugify(value: string): string {
+  return (
+    value
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, "-")
+      .replace(/^-+|-+$/g, "")
+      .slice(0, 60) || "token"
+  );
 }
 
 function mapToken(db: any): Token {
@@ -19,6 +30,8 @@ function mapToken(db: any): Token {
     quota: db.quota,
     totalCost: db.totalCost,
     createdAt: db.createdAt.toISOString(),
+    hasRevealSecret: !!db.revealSecretHash,
+    resetAt: db.resetAt ? db.resetAt.toISOString() : null,
   };
 }
 
@@ -28,6 +41,12 @@ function mapSnapshot(db: any): UsageSnapshot {
     tokenId: db.tokenId,
     tokensUsed: db.tokensUsed,
     cost: db.cost,
+    model: db.model,
+    inputTokens: db.inputTokens,
+    outputTokens: db.outputTokens,
+    latencyMs: db.latencyMs,
+    tokensPerSecond: db.tokensPerSecond,
+    provider: db.provider,
     timestamp: db.timestamp.toISOString(),
   };
 }
@@ -60,9 +79,11 @@ export const supabaseAdapter: StorageAdapter = {
     const row = await prisma.token.create({
       data: {
         name: input.name,
+        slug: (input.slug || slugify(input.name)) + "-" + Date.now().toString(36),
         encryptedValue: encrypted,
         quota: input.quota,
         totalCost: 0,
+        revealSecretHash: input.revealSecret ? hashRevealSecret(input.revealSecret) : null,
         providerId: provider.id,
       },
       include: { provider: true },
@@ -75,6 +96,7 @@ export const supabaseAdapter: StorageAdapter = {
     if (input.name !== undefined) data.name = input.name;
     if (input.quota !== undefined) data.quota = input.quota;
     if (input.apiKey !== undefined) data.encryptedValue = encrypt(input.apiKey);
+    if (input.revealSecret !== undefined) data.revealSecretHash = hashRevealSecret(input.revealSecret);
     if (input.provider !== undefined) {
       const provider = await prisma.provider.upsert({
         where: { name: input.provider },
@@ -103,14 +125,33 @@ export const supabaseAdapter: StorageAdapter = {
     return rows.map(mapSnapshot);
   },
 
-  addSnapshot: async (tokenId: string, tokensUsed: number, cost: number) => {
+  addSnapshot: async (tokenId: string, usage: UsageSnapshotInput) => {
     const row = await prisma.usageSnapshot.create({
-      data: { tokenId, tokensUsed, cost },
+      data: {
+        tokenId,
+        tokensUsed: usage.tokensUsed,
+        cost: usage.cost,
+        model: usage.model ?? null,
+        inputTokens: usage.inputTokens ?? 0,
+        outputTokens: usage.outputTokens ?? 0,
+        latencyMs: usage.latencyMs ?? null,
+        tokensPerSecond: usage.tokensPerSecond ?? null,
+        provider: usage.provider ?? null,
+      },
     });
     await prisma.token.update({
       where: { id: tokenId },
-      data: { totalCost: { increment: cost } },
+      data: { totalCost: { increment: usage.cost } },
     });
     return mapSnapshot(row);
+  },
+
+  revealToken: async (tokenId: string, revealSecret: string) => {
+    const row = await prisma.token.findUnique({ where: { id: tokenId } });
+    if (!row) return { ok: false, error: "Token no encontrado" };
+    if (!verifyRevealSecret(revealSecret, row.revealSecretHash)) {
+      return { ok: false, error: "// Clave incorrecta" };
+    }
+    return { ok: true, key: decrypt(row.encryptedValue) };
   },
 };

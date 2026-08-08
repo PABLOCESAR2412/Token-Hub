@@ -1,6 +1,7 @@
 import { createFileRoute, Link, useRouter } from "@tanstack/react-router";
 import { useToken, useDeleteToken } from "../../lib/hooks";
-import { ArrowLeft, Trash2, Calendar, DollarSign, Zap } from "lucide-react";
+import { RevealKey } from "../../components/RevealKey";
+import { ArrowLeft, Trash2, Calendar, DollarSign, Zap, Shield } from "lucide-react";
 
 export const Route = createFileRoute("/token/$tokenId")({
   component: TokenDetail,
@@ -76,6 +77,13 @@ function TokenDetail() {
         <div className="font-mono text-sm text-bone/50 mt-2">
           Cuota: {token.quota === 0 ? "Ilimitada" : token.quota.toLocaleString()}
         </div>
+      </div>
+
+      <div className="bg-pure/40 border border-bone/20 p-5">
+        <div className="flex items-center gap-2 font-mono text-xs text-bone/50 uppercase mb-4">
+          <Shield size={13} /> Revelar key
+        </div>
+        <RevealKey tokenId={token.id} hasRevealSecret={token.hasRevealSecret} />
       </div>
 
       {snapshots.length > 0 && (

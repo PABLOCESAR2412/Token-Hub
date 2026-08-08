@@ -13,6 +13,9 @@ export interface Token {
   quota: number;
   totalCost: number;
   createdAt: string;
+  hasRevealSecret: boolean;
+  revealSecretHash?: string;
+  resetAt?: string | null;
 }
 
 export interface UsageSnapshot {
@@ -20,6 +23,12 @@ export interface UsageSnapshot {
   tokenId: string;
   tokensUsed: number;
   cost: number;
+  model?: string | null;
+  inputTokens?: number;
+  outputTokens?: number;
+  latencyMs?: number | null;
+  tokensPerSecond?: number | null;
+  provider?: string | null;
   timestamp: string;
 }
 
@@ -32,6 +41,8 @@ export type CreateTokenInput = {
   provider: string;
   apiKey: string;
   quota: number;
+  slug?: string;
+  revealSecret?: string;
 };
 
 export type UpdateTokenInput = {
@@ -40,4 +51,5 @@ export type UpdateTokenInput = {
   provider?: string;
   apiKey?: string;
   quota?: number;
+  revealSecret?: string;
 };
