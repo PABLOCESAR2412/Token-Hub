@@ -8,6 +8,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import * as React from "react";
 import { Logo } from "../components/Logo";
 import { LoginScreen } from "../components/LoginScreen";
+import { ChangePasswordScreen } from "../components/ChangePasswordScreen";
 import { useSession } from "../lib/use-session";
 import "../global.css";
 
@@ -87,7 +88,7 @@ function AppLayout() {
       <main className="flex-1 w-full max-w-[1440px] mx-auto px-6 lg:px-8 py-8 lg:py-12 min-w-0">
         {isProd ? <AuthGate /> : <Outlet />}
       </main>
-      <footer className="border-t border-bone/20 px-6 lg:px-8 py-5 flex flex-col sm:flex-row items-center justify-between gap-2">
+      <footer className="border-t border-bone/20 px-6 lg:px-8 py-5 flex flex-col sm:flex-row items-center justify-between gap-2 bg-stone/90 backdrop-blur">
         <p className="font-mono text-xs text-bone/40 uppercase tracking-widest">
           Hecho por{" "}
           <a
@@ -125,7 +126,7 @@ function AppLayout() {
 }
 
 function AuthGate() {
-  const { authed, logout } = useSession();
+  const { authed, mustChangePassword } = useSession();
 
   // When a 401 (session expired) bubbles from a query, log out the client side.
   return authed === null ? (
@@ -133,9 +134,13 @@ function AuthGate() {
       Verificando sesión...
     </div>
   ) : authed ? (
-    <AuthLayout>
-      <Outlet />
-    </AuthLayout>
+    mustChangePassword ? (
+      <ChangePasswordScreen />
+    ) : (
+      <AuthLayout>
+        <Outlet />
+      </AuthLayout>
+    )
   ) : (
     <LoginScreen />
   );

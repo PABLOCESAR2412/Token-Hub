@@ -1,6 +1,8 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { setCookie } from "@tanstack/react-start/server";
 import { createSessionToken, COOKIE_NAME } from "../../../lib/auth";
+import { DEFAULT_PASSWORD } from "../../../lib/credentials";
+import { verifyOwnerPassword, getAuthState } from "../../../lib/credentials";
 
 export const Route = createFileRoute("/api/auth/login")({
   server: {
@@ -11,10 +13,12 @@ export const Route = createFileRoute("/api/auth/login")({
           return Response.json({ error: "Password required" }, { status: 400 });
         }
 
-        const expected = process.env.AUTH_PASSWORD;
-        if (!expected || body.password !== expected) {
+        const ok = await verifyOwnerPassword(body.password);
+        if (!ok) {
           return Response.json({ error: "Invalid password" }, { status: 401 });
         }
+
+        const { mustChangePassword } = await getAuthState();
 
         setCookie(COOKIE_NAME, createSessionToken(), {
           httpOnly: true,
@@ -23,7 +27,12 @@ export const Route = createFileRoute("/api/auth/login")({
           path: "/",
           maxAge: 60 * 60 * 24 * 7,
         });
-        return Response.json({ ok: true });
+
+        return Response.json({
+          ok: true,
+          mustChangePassword,
+          hint: mustChangePassword ? `Usa la contraseña por defecto: ${DEFAULT_PASSWORD}` : undefined,
+        });
       },
     },
   },

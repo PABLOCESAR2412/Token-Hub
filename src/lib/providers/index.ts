@@ -1,7 +1,9 @@
+import { PROVIDER_CATALOG } from "./catalog";
 import { googleProvider } from "./google";
 import { nvidiaProvider } from "./nvidia";
 import { opencodeZenProvider } from "./opencode-zen";
 import { openRouterProvider } from "./openrouter";
+import { makeStaticProvider } from "./generic";
 
 export interface ModelUsage {
   model: string | null;
@@ -26,9 +28,20 @@ export interface ProviderAdapter {
   fetchUsage: (apiKey: string) => Promise<ProviderUsage>;
 }
 
-export const providers: ProviderAdapter[] = [
+const realAdapters: ProviderAdapter[] = [
+  openRouterProvider,
   googleProvider,
   nvidiaProvider,
   opencodeZenProvider,
-  openRouterProvider,
 ];
+
+// Providers without a public usage endpoint get a graceful fallback adapter.
+const staticProviders = PROVIDER_CATALOG.filter(
+  (p) => !realAdapters.some((a) => a.slug === p.slug)
+).map((p) => makeStaticProvider({ name: p.label, slug: p.slug }));
+
+export const providers: ProviderAdapter[] = [...realAdapters, ...staticProviders];
+
+export function getProviderBySlug(slug: string): ProviderAdapter | undefined {
+  return providers.find((p) => p.slug === slug || p.name.toLowerCase() === slug.toLowerCase());
+}

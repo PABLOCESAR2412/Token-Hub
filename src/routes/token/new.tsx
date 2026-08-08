@@ -1,5 +1,6 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useAddToken } from "../../lib/hooks";
+import { PROVIDER_CATALOG } from "../../lib/providers/catalog";
 import * as React from "react";
 import { ArrowLeft } from "lucide-react";
 
@@ -85,12 +86,11 @@ function TokenForm() {
             onChange={(e) => setForm({ ...form, provider: e.target.value })}
             className={inputClass + " uppercase"}
           >
-            <option value="openrouter">OpenRouter</option>
-            <option value="openai">OpenAI</option>
-            <option value="anthropic">Anthropic</option>
-            <option value="google">Google</option>
-            <option value="nvidia">NVIDIA</option>
-            <option value="opencode-zen">OpenCode Zen</option>
+            {PROVIDER_CATALOG.map((p) => (
+              <option key={p.slug} value={p.slug}>
+                {p.label}
+              </option>
+            ))}
           </select>
         </div>
 

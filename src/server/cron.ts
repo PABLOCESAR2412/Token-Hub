@@ -1,6 +1,6 @@
 import { createServerFn } from "@tanstack/react-start";
 import { loadAdapter } from "../lib/storage-adapter";
-import { providers } from "../lib/providers";
+import { getProviderBySlug } from "../lib/providers";
 
 // Server function triggered by cron (Vercel) or manual call
 // Polls each supported provider for current usage, saves a UsageSnapshot
@@ -11,7 +11,7 @@ export const pollUsage = createServerFn({ method: "POST" })
     const results: Array<{ tokenId: string; provider: string; success: boolean; error?: string }> = [];
 
     for (const token of tokens) {
-      const providerAdapter = providers.find((p) => p.slug === token.provider);
+      const providerAdapter = getProviderBySlug(token.provider);
       if (!providerAdapter) {
         results.push({ tokenId: token.id, provider: token.provider, success: false, error: "Provider not supported" });
         continue;

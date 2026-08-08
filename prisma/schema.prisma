@@ -49,3 +49,11 @@ model UsageSnapshot {
   provider        String?
   timestamp       DateTime @default(now())
 }
+
+model AuthConfig {
+  id                String   @id @default("owner") // single row
+  passwordHash      String   // scrypt hash of the owner password
+  mustChangePassword Boolean  @default(true)
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+}

@@ -1,14 +1,18 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { getCookie } from "@tanstack/react-start/server";
 import { verifySessionToken, COOKIE_NAME } from "../../../lib/auth";
+import { getAuthState } from "../../../lib/credentials";
 
 export const Route = createFileRoute("/api/auth/session")({
   server: {
     handlers: {
-      GET: () => {
+      GET: async () => {
         const token = getCookie(COOKIE_NAME);
         const authed = verifySessionToken(token);
-        return Response.json({ authed });
+        if (!authed) return Response.json({ authed: false });
+
+        const { mustChangePassword } = await getAuthState();
+        return Response.json({ authed: true, mustChangePassword });
       },
     },
   },

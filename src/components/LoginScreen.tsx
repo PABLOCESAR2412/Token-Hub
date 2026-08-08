@@ -40,6 +40,9 @@ export function LoginScreen() {
             <p className="font-mono text-xs text-bone/40 mt-3">
               {"> se requiere autenticación para gestionar tokens"}
             </p>
+            <p className="font-mono text-xs text-bone/40 mt-1">
+              {"> primera vez -> admin123 (deberás cambiarla)"}
+            </p>
           </div>
         </div>
 

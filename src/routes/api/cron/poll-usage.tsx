@@ -1,7 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { json } from "@tanstack/react-start";
 import { loadAdapter } from "../../../lib/storage-adapter";
-import { providers } from "../../../lib/providers";
+import { getProviderBySlug } from "../../../lib/providers";
 import { decrypt } from "../../../lib/crypto";
 
 // Verifies CRON_SECRET to prevent unauthorized access
@@ -22,7 +22,7 @@ export const Route = createFileRoute("/api/cron/poll-usage")({
         const results: Array<{ tokenId: string; provider: string; success: boolean; error?: string }> = [];
 
         for (const token of tokens) {
-          const providerAdapter = providers.find((p) => p.slug === token.provider || p.name === token.provider);
+          const providerAdapter = getProviderBySlug(token.provider);
           if (!providerAdapter) {
             results.push({ tokenId: token.id, provider: token.provider, success: false, error: "Provider not supported" });
             continue;
