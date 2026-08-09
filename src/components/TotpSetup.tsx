@@ -1,4 +1,5 @@
 import * as React from "react";
+import QRCode from "qrcode";
 import { useSetupTotp, useEnableTotp, useDisableTotp } from "../lib/hooks";
 import { Copy, Check, ShieldCheck, ShieldOff } from "lucide-react";
 import { ConfirmDialog, useConfirmDialog } from "./ConfirmDialog";
@@ -12,9 +13,26 @@ export function TotpSetup({ tokenId, hasTotp }: { tokenId: string; hasTotp: bool
   const [pending, setPending] = React.useState(false);
   const [secret, setSecret] = React.useState<string | null>(null);
   const [uri, setUri] = React.useState<string | null>(null);
+  const [qrDataUrl, setQrDataUrl] = React.useState<string | null>(null);
   const [code, setCode] = React.useState("");
   const [error, setError] = React.useState<string | null>(null);
   const [copied, setCopied] = React.useState(false);
+
+  React.useEffect(() => {
+    let cancelled = false;
+    if (!uri) {
+      setQrDataUrl(null);
+      return;
+    }
+    QRCode.toDataURL(uri, { width: 200, margin: 2 })
+      .then((url) => {
+        if (!cancelled) setQrDataUrl(url);
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [uri]);
 
   const handleStart = async () => {
     setError(null);
@@ -114,18 +132,29 @@ export function TotpSetup({ tokenId, hasTotp }: { tokenId: string; hasTotp: bool
         <div className="space-y-3 border border-dashed border-electric/40 p-4">
           <p className="font-mono text-xs text-bone/60 leading-relaxed">
             1. Agrega el secreto en tu app de authenticator (Google Authenticator,
-            Authy, 1Password) escaneando el URI o copiandolo. Le va a pedir el
+            Authy, 1Password) escaneando el QR o copiando el URI. Le va a pedir el
             codigo de 6 digitos que cambia cada 30s.
           </p>
-          <div className="flex items-center gap-2 bg-pure/60 border border-bone/20 px-3 py-2">
-            <code className="flex-1 font-mono text-xs text-electric break-all">{uri}</code>
-            <button
-              onClick={copyUri}
-              className="text-bone/40 hover:text-electric transition-colors shrink-0"
-              title="Copiar URI"
-            >
-              {copied ? <Check size={15} /> : <Copy size={15} />}
-            </button>
+          <div className="flex flex-col sm:flex-row items-center gap-4">
+            {qrDataUrl && (
+              <div className="bg-white p-2 shrink-0">
+                <img
+                  src={qrDataUrl}
+                  alt="Codigo QR de 2FA"
+                  className="w-40 h-40"
+                />
+              </div>
+            )}
+            <div className="flex-1 w-full flex items-center gap-2 bg-pure/60 border border-bone/20 px-3 py-2">
+              <code className="flex-1 font-mono text-xs text-electric break-all">{uri}</code>
+              <button
+                onClick={copyUri}
+                className="text-bone/40 hover:text-electric transition-colors shrink-0"
+                title="Copiar URI"
+              >
+                {copied ? <Check size={15} /> : <Copy size={15} />}
+              </button>
+            </div>
           </div>
           <div className="grid grid-cols-[1fr_auto] items-end gap-3">
             <div>
