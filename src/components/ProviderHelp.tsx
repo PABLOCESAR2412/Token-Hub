@@ -1,5 +1,5 @@
 import * as React from "react";
-import { getProviderGuide, providerHasAnalytics } from "../lib/providers/guides";
+import { getProviderGuide, providerHasAnalytics, FIELD_LABELS, FIELD_PREFIX } from "../lib/providers/guides";
 import { PROVIDER_CATALOG } from "../lib/providers/catalog";
 import { Info, X, BarChart2, XCircle, KeyRound } from "lucide-react";
 
@@ -65,7 +65,7 @@ export function ProviderHelpDialog({
                     key={f}
                     className="font-mono text-xs border border-electric/40 text-electric px-2 py-1"
                   >
-                    {f} *
+                    {FIELD_LABELS[f]} *
                   </code>
                 ))}
               </div>
@@ -77,21 +77,59 @@ export function ProviderHelpDialog({
           </div>
 
           <div>
-            <div className="font-mono text-xs uppercase text-bone/50 mb-2">Como obtener la API Key</div>
-            {guide && guide.steps.length > 0 ? (
-              <ol className="space-y-2">
-                {guide.steps.map((step, i) => (
-                  <li key={i} className="flex gap-3 font-mono text-sm text-bone/80">
-                    <span className="text-electric font-bold shrink-0">{i + 1}.</span>
-                    <span className="leading-relaxed">{step}</span>
-                  </li>
-                ))}
-              </ol>
+            <div className="font-mono text-xs uppercase text-bone/50 mb-2">Como obtener cada dato</div>
+            {guide && Object.keys(guide.fieldSteps).length > 0 ? (
+              <div className="space-y-5">
+                {(Object.keys(guide.fieldSteps) as Array<keyof typeof guide.fieldSteps>).map((field) => {
+                  const steps = guide.fieldSteps[field] ?? [];
+                  return (
+                    <div key={field}>
+                      <div className="flex items-center gap-2 font-mono text-xs text-electric uppercase mb-2">
+                        <KeyRound size={13} />
+                        {FIELD_LABELS[field]}{" "}
+                        <span className="text-bone/40 normal-case font-normal">
+                          ({FIELD_PREFIX[field]})
+                        </span>
+                      </div>
+                      <ol className="space-y-1.5">
+                        {steps.map((step, i) => (
+                          <li key={i} className="flex gap-3 font-mono text-sm text-bone/80">
+                            <span className="text-electric font-bold shrink-0">{i + 1}.</span>
+                            <span className="leading-relaxed">{step}</span>
+                          </li>
+                        ))}
+                      </ol>
+                    </div>
+                  );
+                })}
+              </div>
             ) : (
               <p className="font-mono text-xs text-bone/40">
                 Sin instrucciones específicas para este proveedor.
               </p>
             )}
+          </div>
+
+          <div>
+            <div className="font-mono text-xs uppercase text-bone/50 mb-2">Que es cada campo</div>
+            <ul className="space-y-2 font-mono text-xs text-bone/60 leading-relaxed">
+              <li className="flex gap-2">
+                <span className="text-electric shrink-0">[apiKey]</span>
+                Secreto principal del proveedor. Se encripta en la BD.
+              </li>
+              <li className="flex gap-2">
+                <span className="text-electric shrink-0">[publicKey]</span>
+                Clave pública complementaria (p. ej. langfuse pk-lf-...).
+              </li>
+              <li className="flex gap-2">
+                <span className="text-electric shrink-0">[trackingKey]</span>
+                Clave secundaria de métricas por token/sesion.
+              </li>
+              <li className="flex gap-2">
+                <span className="text-electric shrink-0">[baseUrl]</span>
+                URL del endpoint (override) o del servidor local.
+              </li>
+            </ul>
           </div>
         </div>
 
@@ -115,7 +153,7 @@ export function ProviderHelpTrigger({ onClick }: { onClick: () => void }) {
       onClick={onClick}
       className="inline-flex items-center gap-1 ml-2 font-mono text-[11px] uppercase text-electric border border-electric/40 px-2 py-1 hover:bg-electric/10 transition-colors align-middle"
     >
-      <Info size={12} /> Como obtener la key
+      <Info size={12} /> Como obtener los datos
     </button>
   );
 }
