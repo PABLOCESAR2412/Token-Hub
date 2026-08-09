@@ -1,5 +1,7 @@
 import type { Token, UsageSnapshot, TokenWithUsage, CreateTokenInput, UpdateTokenInput } from "../types";
 
+export type { Token, UsageSnapshot, TokenWithUsage, CreateTokenInput, UpdateTokenInput } from "../types";
+
 export interface UsageSnapshotInput {
   tokensUsed: number;
   cost: number;
@@ -9,12 +11,23 @@ export interface UsageSnapshotInput {
   latencyMs?: number | null;
   tokensPerSecond?: number | null;
   provider?: string | null;
+  timestamp?: string;
 }
 
 export interface RevealResult {
   ok: boolean;
   key?: string;
+  publicKey?: string | null;
+  trackingKey?: string | null;
+  baseUrl?: string | null;
+  notes?: string | null;
   error?: string;
+}
+
+export interface TotpSetupResult {
+  secret: string;
+  uri: string;
+  account: string;
 }
 
 export interface StorageAdapter {
@@ -25,7 +38,10 @@ export interface StorageAdapter {
   deleteToken: (id: string) => Promise<void>;
   getSnapshots: (tokenId: string) => Promise<UsageSnapshot[]>;
   addSnapshot: (tokenId: string, usage: UsageSnapshotInput) => Promise<UsageSnapshot>;
-  revealToken: (tokenId: string, revealSecret: string) => Promise<RevealResult>;
+  revealToken: (tokenId: string, revealSecret: string, code?: string) => Promise<RevealResult>;
+  setupTotp: (tokenId: string) => Promise<TotpSetupResult>;
+  enableTotp: (tokenId: string, secret: string, code: string) => Promise<RevealResult>;
+  disableTotp: (tokenId: string) => Promise<RevealResult>;
 }
 
 async function loadAdapter(): Promise<StorageAdapter> {

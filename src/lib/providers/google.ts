@@ -1,11 +1,11 @@
-import type { ProviderAdapter, ProviderUsage } from "./index";
+import type { ProviderAdapter, ProviderUsage, ProviderContext } from "./index";
 
 // Google Cloud AI Platform - fetches billing/quota usage
 // Docs: https://cloud.google.com/billing/docs/reference/rest/v1/services
 export const googleProvider: ProviderAdapter = {
   name: "Google",
   slug: "google",
-  fetchUsage: async (apiKey: string): Promise<ProviderUsage> => {
+  fetchUsage: async ({ apiKey }: ProviderContext): Promise<ProviderUsage> => {
     try {
       // Google Cloud Billing API - get service usage for AI Platform
       // In production, use the service account key or API key

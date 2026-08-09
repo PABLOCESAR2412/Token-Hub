@@ -1,8 +1,29 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useSyncExternalStore } from "react";
 
 interface SessionState {
   authed: boolean | null;
   mustChangePassword: boolean;
+}
+
+// Module-level store so every component that calls useSession() observes
+// the same state (LoginScreen / AuthGate / LogoutButton share it).
+let state: SessionState = { authed: null, mustChangePassword: false };
+const listeners = new Set<() => void>();
+
+function setState(next: SessionState) {
+  state = next;
+  for (const l of listeners) l();
+}
+
+function subscribe(listener: () => void): () => void {
+  listeners.add(listener);
+  return () => {
+    listeners.delete(listener);
+  };
+}
+
+function getSnapshot(): SessionState {
+  return state;
 }
 
 async function checkSession(): Promise<SessionState> {
@@ -20,16 +41,11 @@ async function checkSession(): Promise<SessionState> {
 }
 
 export function useSession() {
-  const [state, setState] = useState<SessionState>({ authed: null, mustChangePassword: false });
+  const session = useSyncExternalStore(subscribe, getSnapshot, getSnapshot);
 
   useEffect(() => {
-    let active = true;
-    checkSession().then((s) => {
-      if (active) setState(s);
-    });
-    return () => {
-      active = false;
-    };
+    checkSession().then((s) => setState(s));
+    return () => {};
   }, []);
 
   const login = useCallback(async (password: string): Promise<string | null> => {
@@ -71,17 +87,17 @@ export function useSession() {
 
   // Re-check periodically so an expired session triggers the login screen.
   useEffect(() => {
-    if (!state.authed) return;
+    if (!session.authed) return;
     const id = setInterval(async () => {
       const s = await checkSession();
       if (!s.authed) setState({ authed: false, mustChangePassword: false });
     }, 60_000);
     return () => clearInterval(id);
-  }, [state.authed]);
+  }, [session.authed]);
 
   return {
-    authed: state.authed,
-    mustChangePassword: state.mustChangePassword,
+    authed: session.authed,
+    mustChangePassword: session.mustChangePassword,
     login,
     logout,
     changePassword,

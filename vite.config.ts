@@ -26,6 +26,7 @@ export default defineConfig(() => ({
   },
   resolve: {
     alias: {
+      "~/router-tree": path.resolve(__dirname, "./src/routeTree.gen.ts"),
       "~": path.resolve(__dirname, "./src"),
     },
   },

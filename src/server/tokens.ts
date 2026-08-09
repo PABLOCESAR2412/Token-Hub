@@ -55,10 +55,50 @@ export const getSnapshots = createServerFn({ method: "GET" })
 
 export const revealToken = createServerFn({ method: "POST" })
   .validator(
-    (input: { tokenId: string; revealSecret: string }) => input
+    (input: { tokenId: string; revealSecret: string; code?: string }) => input
   )
   .handler(async ({ data }) => {
     if (!isAuthorized(getRequest())) return unauthorizedResponse();
     const adapter = await loadAdapter();
-    return await adapter.revealToken(data.tokenId, data.revealSecret);
+    return await adapter.revealToken(data.tokenId, data.revealSecret, data.code);
+  });
+
+export const setupTotp = createServerFn({ method: "POST" })
+  .validator((tokenId: string) => tokenId)
+  .handler(async ({ data }) => {
+    if (!isAuthorized(getRequest())) return unauthorizedResponse();
+    const adapter = await loadAdapter();
+    return await adapter.setupTotp(data);
+  });
+
+export const enableTotp = createServerFn({ method: "POST" })
+  .validator(
+    (input: { tokenId: string; secret: string; code: string }) => input
+  )
+  .handler(async ({ data }) => {
+    if (!isAuthorized(getRequest())) return unauthorizedResponse();
+    const adapter = await loadAdapter();
+    return await adapter.enableTotp(data.tokenId, data.secret, data.code);
+  });
+
+export const disableTotp = createServerFn({ method: "POST" })
+  .validator((tokenId: string) => tokenId)
+  .handler(async ({ data }) => {
+    if (!isAuthorized(getRequest())) return unauthorizedResponse();
+    const adapter = await loadAdapter();
+    return await adapter.disableTotp(data);
+  });
+
+export const addSnapshot = createServerFn({ method: "POST" })
+  .validator(
+    (input: { tokenId: string; tokensUsed: number; cost: number }) => input
+  )
+  .handler(async ({ data }) => {
+    if (!isAuthorized(getRequest())) return unauthorizedResponse();
+    const adapter = await loadAdapter();
+    return await adapter.addSnapshot(data.tokenId, {
+      tokensUsed: data.tokensUsed,
+      cost: data.cost,
+      model: null,
+    });
   });

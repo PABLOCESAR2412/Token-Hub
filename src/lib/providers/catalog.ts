@@ -27,4 +27,5 @@ export const PROVIDER_CATALOG: ProviderInfo[] = [
   { slug: "ollama", label: "Ollama", description: "Modelos locales (localhost)" },
   { slug: "lmstudio", label: "LM Studio", description: "Servidor local OpenAI-compatible" },
   { slug: "opencode-zen", label: "OpenCode Zen", description: "K3s de OpenCode" },
+  { slug: "langfuse", label: "Langfuse", description: "Observabilidad y trazado de LLM (Metrics API)" },
 ];

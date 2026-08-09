@@ -5,10 +5,19 @@ import { Eye, EyeOff } from "lucide-react";
 const REVEAL_MS = 10_000;
 const TICK_MS = 100;
 
-export function RevealKey({ tokenId, hasRevealSecret }: { tokenId: string; hasRevealSecret: boolean }) {
+export function RevealKey({
+  tokenId,
+  hasRevealSecret,
+  hasTotp,
+}: {
+  tokenId: string;
+  hasRevealSecret: boolean;
+  hasTotp: boolean;
+}) {
   const reveal = useRevealToken();
   const [key, setKey] = React.useState<string | null>(null);
   const [secret, setSecret] = React.useState("");
+  const [code, setCode] = React.useState("");
   const [error, setError] = React.useState<string | null>(null);
   const [remaining, setRemaining] = React.useState(0);
 
@@ -41,12 +50,21 @@ export function RevealKey({ tokenId, hasRevealSecret }: { tokenId: string; hasRe
       setError("// Ingresa la clave para ver");
       return;
     }
+    if (hasTotp && !/^\d{6}$/.test(code)) {
+      setError("// Ingresa el codigo 2FA de 6 digitos");
+      return;
+    }
     try {
-      const res: any = await reveal.mutateAsync({ tokenId, revealSecret: secret });
+      const res: any = await reveal.mutateAsync({
+        tokenId,
+        revealSecret: secret,
+        code: hasTotp ? code : undefined,
+      });
       if (res?.ok && res.key) {
         setKey(res.key);
         setRemaining(REVEAL_MS);
         setSecret("");
+        setCode("");
         startTimer();
       } else {
         setError(res?.error || "// Error");
@@ -59,23 +77,38 @@ export function RevealKey({ tokenId, hasRevealSecret }: { tokenId: string; hasRe
   return (
     <div className="space-y-3">
       {key === null ? (
-        <div className="flex items-center gap-3">
-          <input
-            type="password"
-            value={secret}
-            onChange={(e) => setSecret(e.target.value)}
-            placeholder={hasRevealSecret ? "Clave para ver" : "No configurada"}
-            disabled={!hasRevealSecret}
-            className="flex-1 bg-pure border border-bone/20 focus:border-electric outline-none px-3 py-2 text-sm font-mono placeholder:text-bone/30 transition-colors disabled:opacity-50"
-          />
-          <button
-            onClick={handleReveal}
-            disabled={!hasRevealSecret || reveal.isPending}
-            className="flex items-center gap-2 bg-electric text-bone px-3 py-2 font-mono text-xs uppercase font-bold hover:opacity-90 disabled:opacity-50 transition-colors"
-          >
-            <Eye size={14} />
-            {hasRevealSecret ? "Ver 10s" : "Sin clave"}
-          </button>
+        <div className="space-y-3">
+          <div className="flex items-center gap-3">
+            <input
+              type="password"
+              value={secret}
+              onChange={(e) => setSecret(e.target.value)}
+              placeholder={hasRevealSecret ? "Clave para ver" : "No configurada"}
+              disabled={!hasRevealSecret}
+              className="flex-1 bg-pure border border-bone/20 focus:border-electric outline-none px-3 py-2 text-sm font-mono placeholder:text-bone/30 transition-colors disabled:opacity-50"
+            />
+            <button
+              onClick={handleReveal}
+              disabled={!hasRevealSecret || reveal.isPending}
+              className="flex items-center gap-2 bg-electric text-bone px-3 py-2 font-mono text-xs uppercase font-bold hover:opacity-90 disabled:opacity-50 transition-colors"
+            >
+              <Eye size={14} />
+              {hasRevealSecret ? "Ver 10s" : "Sin clave"}
+            </button>
+          </div>
+          {hasTotp && (
+            <input
+              type="text"
+              inputMode="numeric"
+              pattern="[0-9]*"
+              maxLength={6}
+              value={code}
+              onChange={(e) => setCode(e.target.value.replace(/[^0-9]/g, ""))}
+              placeholder="Codigo 2FA (6 digitos)"
+              autoComplete="one-time-code"
+              className="w-full bg-pure border border-bone/20 focus:border-electric outline-none px-3 py-2 text-sm font-mono tracking-[0.5em] placeholder:text-bone/30 transition-colors"
+            />
+          )}
         </div>
       ) : (
         <div className="space-y-2">

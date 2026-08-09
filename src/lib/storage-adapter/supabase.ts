@@ -1,7 +1,8 @@
 import { PrismaClient } from "@prisma/client";
 import { encrypt, decrypt } from "../crypto";
 import { hashRevealSecret, verifyRevealSecret } from "../reveal";
-import type { StorageAdapter, Token, UsageSnapshot, TokenWithUsage, CreateTokenInput, UpdateTokenInput, UsageSnapshotInput } from "../types";
+import { generateTotpSecret, verifyTotp } from "../totp";
+import type { StorageAdapter, Token, UsageSnapshot, TokenWithUsage, CreateTokenInput, UpdateTokenInput, UsageSnapshotInput } from "./index";
 
 const prisma = new PrismaClient();
 
@@ -31,7 +32,16 @@ function mapToken(db: any): Token {
     totalCost: db.totalCost,
     createdAt: db.createdAt.toISOString(),
     hasRevealSecret: !!db.revealSecretHash,
+    hasTotp: !!db.totpSecret,
     resetAt: db.resetAt ? db.resetAt.toISOString() : null,
+    hasPublicKey: !!db.publicKey,
+    hasTrackingKey: !!db.trackingKey,
+    publicKey: db.publicKey ?? undefined,
+    trackingKey: db.trackingKey ?? undefined,
+    publicKeyMasked: db.publicKey ? maskKey(decrypt(db.publicKey)) : null,
+    trackingKeyMasked: db.trackingKey ? maskKey(decrypt(db.trackingKey)) : null,
+    baseUrl: db.baseUrl ?? null,
+    notes: db.notes ?? null,
   };
 }
 
@@ -83,7 +93,11 @@ export const supabaseAdapter: StorageAdapter = {
         encryptedValue: encrypted,
         quota: input.quota,
         totalCost: 0,
-        revealSecretHash: input.revealSecret ? hashRevealSecret(input.revealSecret) : null,
+        revealSecretHash: input.revealSecret ? await hashRevealSecret(input.revealSecret) : null,
+        publicKey: input.publicKey ? encrypt(input.publicKey) : null,
+        trackingKey: input.trackingKey ? encrypt(input.trackingKey) : null,
+        baseUrl: input.baseUrl ?? null,
+        notes: input.notes ?? null,
         providerId: provider.id,
       },
       include: { provider: true },
@@ -96,7 +110,11 @@ export const supabaseAdapter: StorageAdapter = {
     if (input.name !== undefined) data.name = input.name;
     if (input.quota !== undefined) data.quota = input.quota;
     if (input.apiKey !== undefined) data.encryptedValue = encrypt(input.apiKey);
-    if (input.revealSecret !== undefined) data.revealSecretHash = hashRevealSecret(input.revealSecret);
+    if (input.revealSecret !== undefined) data.revealSecretHash = await hashRevealSecret(input.revealSecret);
+    if (input.publicKey !== undefined) data.publicKey = input.publicKey ? encrypt(input.publicKey) : null;
+    if (input.trackingKey !== undefined) data.trackingKey = input.trackingKey ? encrypt(input.trackingKey) : null;
+    if (input.baseUrl !== undefined) data.baseUrl = input.baseUrl ?? null;
+    if (input.notes !== undefined) data.notes = input.notes ?? null;
     if (input.provider !== undefined) {
       const provider = await prisma.provider.upsert({
         where: { name: input.provider },
@@ -137,6 +155,7 @@ export const supabaseAdapter: StorageAdapter = {
         latencyMs: usage.latencyMs ?? null,
         tokensPerSecond: usage.tokensPerSecond ?? null,
         provider: usage.provider ?? null,
+        timestamp: usage.timestamp ?? new Date().toISOString(),
       },
     });
     await prisma.token.update({
@@ -146,12 +165,44 @@ export const supabaseAdapter: StorageAdapter = {
     return mapSnapshot(row);
   },
 
-  revealToken: async (tokenId: string, revealSecret: string) => {
+  revealToken: async (tokenId: string, revealSecret: string, code?: string) => {
     const row = await prisma.token.findUnique({ where: { id: tokenId } });
     if (!row) return { ok: false, error: "Token no encontrado" };
-    if (!verifyRevealSecret(revealSecret, row.revealSecretHash)) {
+    if (!(await verifyRevealSecret(revealSecret, row.revealSecretHash))) {
       return { ok: false, error: "// Clave incorrecta" };
     }
-    return { ok: true, key: decrypt(row.encryptedValue) };
+    if (row.totpSecret) {
+      if (!code) return { ok: false, error: "// Se requiere el codigo 2FA" };
+      const valid = await verifyTotp(row.totpSecret, code);
+      if (!valid) return { ok: false, error: "// Codigo 2FA incorrecto" };
+    }
+    return {
+      ok: true,
+      key: decrypt(row.encryptedValue),
+      publicKey: row.publicKey ? decrypt(row.publicKey) : null,
+      trackingKey: row.trackingKey ? decrypt(row.trackingKey) : null,
+      baseUrl: row.baseUrl ?? null,
+      notes: row.notes ?? null,
+    };
+  },
+
+  setupTotp: async (tokenId: string) => {
+    const row = await prisma.token.findUnique({ where: { id: tokenId } });
+    if (!row) throw new Error("Token no encontrado");
+    return generateTotpSecret(row.name || "token");
+  },
+
+  enableTotp: async (tokenId: string, secret: string, code: string) => {
+    const row = await prisma.token.findUnique({ where: { id: tokenId } });
+    if (!row) return { ok: false, error: "Token no encontrado" };
+    const valid = await verifyTotp(secret, code);
+    if (!valid) return { ok: false, error: "// Codigo 2FA incorrecto" };
+    await prisma.token.update({ where: { id: tokenId }, data: { totpSecret: secret } });
+    return { ok: true };
+  },
+
+  disableTotp: async (tokenId: string) => {
+    await prisma.token.update({ where: { id: tokenId }, data: { totpSecret: null } });
+    return { ok: true };
   },
 };

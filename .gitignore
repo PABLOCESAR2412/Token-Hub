@@ -39,3 +39,6 @@ report.[0-9]_.[0-9]_.[0-9]_.[0-9]_.json
 .vercel
 .agents/
 skills-lock.json
+
+# Per-build generated route tree (Cloudflare SPA, excludes /api)
+src/routeTree.gen.cloudflare.ts

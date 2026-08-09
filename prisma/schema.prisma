@@ -25,9 +25,16 @@ model Token {
   quota            Int       @default(0) // 0 means unlimited
   totalCost        Float     @default(0.0)
   revealSecretHash String? // Optional scrypt hash for showing the raw key
+  totpSecret       String? // Optional base32 TOTP secret; reveal requires a 6-digit code
   resetAt          DateTime? // Next quota reset date when the provider exposes it
   createdAt        DateTime  @default(now())
   updatedAt        DateTime  @updatedAt
+
+  // Optional token metadata
+  publicKey        String? // Encrypted public API key (optional, e.g. Langfuse PK)
+  trackingKey      String? // Encrypted tracking key (optional, e.g. per-token metrics)
+  baseUrl          String? // Optional custom base URL for the provider API
+  notes            String? // Free-form observations
 
   providerId String
   provider   Provider @relation(fields: [providerId], references: [id])

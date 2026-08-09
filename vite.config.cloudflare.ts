@@ -11,13 +11,15 @@ export default defineConfig({
       target: "react",
       autoCodeSplitting: true,
       routesDirectory: "./src/routes",
-      generatedRouteTree: "./src/routeTree.gen.ts",
+      generatedRouteTree: "./src/routeTree.gen.cloudflare.ts",
+      routeFileIgnorePattern: "^(api)$",
     }),
     react(),
     tailwindcss(),
   ],
   resolve: {
     alias: {
+      "~/router-tree": path.resolve(import.meta.dirname, "./src/routeTree.gen.cloudflare.ts"),
       "~": path.resolve(import.meta.dirname, "./src"),
     },
   },

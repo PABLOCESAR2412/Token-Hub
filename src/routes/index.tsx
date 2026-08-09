@@ -10,6 +10,7 @@ import {
 import * as React from "react";
 import { useTokens, useDeleteToken } from "../lib/hooks";
 import type { Token } from "../lib/types";
+import { ConfirmDialog, useConfirmDialog } from "../components/ConfirmDialog";
 import { Trash2, Eye } from "lucide-react";
 
 export const Route = createFileRoute("/")({
@@ -21,6 +22,8 @@ function Dashboard() {
   const deleteToken = useDeleteToken();
   const [sorting, setSorting] = React.useState<SortingState>([]);
   const [providerFilter, setProviderFilter] = React.useState("all");
+  const [pendingDelete, setPendingDelete] = React.useState<Token | null>(null);
+  const { dialog, open, close } = useConfirmDialog();
 
   const providers = React.useMemo(() => {
     const set = new Set(tokens.map((t) => t.provider));
@@ -104,7 +107,12 @@ function Dashboard() {
           </Link>
           <button
             onClick={() => {
-              if (confirm("Eliminar este token?")) deleteToken.mutate(info.row.original.id);
+              open({
+                title: "Eliminar Token",
+                message: `Esta acción es irreversible y eliminará "${info.row.original.name}" con todo su historial. ¿Desea continuar?`,
+                danger: true,
+              });
+              setPendingDelete(info.row.original);
             }}
             className="text-bone/40 hover:text-red-400 transition-colors"
           >
@@ -196,6 +204,24 @@ function Dashboard() {
           </div>
         )}
       </div>
+
+      <ConfirmDialog
+        isOpen={dialog.open}
+        title={dialog.title}
+        message={dialog.message}
+        danger={dialog.danger}
+        confirmLabel="Sí, eliminar"
+        cancelLabel="Cancelar"
+        onConfirm={() => {
+          if (pendingDelete) deleteToken.mutate(pendingDelete.id);
+          setPendingDelete(null);
+          close();
+        }}
+        onCancel={() => {
+          setPendingDelete(null);
+          close();
+        }}
+      />
     </div>
   );
 }

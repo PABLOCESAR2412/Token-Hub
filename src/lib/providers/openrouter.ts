@@ -1,11 +1,11 @@
-import type { ProviderAdapter, ProviderUsage } from "./index";
+import type { ProviderAdapter, ProviderUsage, ProviderContext } from "./index";
 
 // OpenRouter - real usage & credits via /api/v1/key and per-model via /api/v1/activity
 // Docs: https://openrouter.ai/docs/api-reference/api-keys/get-current-api-key
 export const openRouterProvider: ProviderAdapter = {
   name: "OpenRouter",
   slug: "openrouter",
-  fetchUsage: async (apiKey: string): Promise<ProviderUsage> => {
+  fetchUsage: async ({ apiKey }: ProviderContext): Promise<ProviderUsage> => {
     const base = "https://openrouter.ai/api/v1";
 
     try {

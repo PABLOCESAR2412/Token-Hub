@@ -14,8 +14,18 @@ export interface Token {
   totalCost: number;
   createdAt: string;
   hasRevealSecret: boolean;
+  hasTotp: boolean;
   revealSecretHash?: string;
+  totpSecret?: string;
   resetAt?: string | null;
+  hasPublicKey?: boolean;
+  hasTrackingKey?: boolean;
+  publicKeyMasked?: string | null;
+  trackingKeyMasked?: string | null;
+  publicKey?: string;
+  trackingKey?: string;
+  baseUrl?: string | null;
+  notes?: string | null;
 }
 
 export interface UsageSnapshot {
@@ -43,6 +53,10 @@ export type CreateTokenInput = {
   quota: number;
   slug?: string;
   revealSecret?: string;
+  publicKey?: string;
+  trackingKey?: string;
+  baseUrl?: string;
+  notes?: string;
 };
 
 export type UpdateTokenInput = {
@@ -52,4 +66,8 @@ export type UpdateTokenInput = {
   apiKey?: string;
   quota?: number;
   revealSecret?: string;
+  publicKey?: string;
+  trackingKey?: string;
+  baseUrl?: string;
+  notes?: string;
 };

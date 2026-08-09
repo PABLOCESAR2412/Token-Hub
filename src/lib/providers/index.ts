@@ -3,6 +3,7 @@ import { googleProvider } from "./google";
 import { nvidiaProvider } from "./nvidia";
 import { opencodeZenProvider } from "./opencode-zen";
 import { openRouterProvider } from "./openrouter";
+import { langfuseProvider } from "./langfuse";
 import { makeStaticProvider } from "./generic";
 
 export interface ModelUsage {
@@ -20,12 +21,20 @@ export interface ProviderUsage {
   cost: number;
   raw?: Record<string, unknown>;
   models?: ModelUsage[];
+  daily?: Array<{ timestamp: string; tokensUsed: number; cost: number; model?: string | null }>;
+}
+
+export interface ProviderContext {
+  apiKey: string;
+  publicKey?: string | null;
+  trackingKey?: string | null;
+  baseUrl?: string | null;
 }
 
 export interface ProviderAdapter {
   name: string;
   slug: string;
-  fetchUsage: (apiKey: string) => Promise<ProviderUsage>;
+  fetchUsage: (ctx: ProviderContext) => Promise<ProviderUsage>;
 }
 
 const realAdapters: ProviderAdapter[] = [
@@ -33,6 +42,7 @@ const realAdapters: ProviderAdapter[] = [
   googleProvider,
   nvidiaProvider,
   opencodeZenProvider,
+  langfuseProvider,
 ];
 
 // Providers without a public usage endpoint get a graceful fallback adapter.

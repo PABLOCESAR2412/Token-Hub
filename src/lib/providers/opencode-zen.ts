@@ -1,11 +1,11 @@
-import type { ProviderAdapter, ProviderUsage } from "./index";
+import type { ProviderAdapter, ProviderUsage, ProviderContext } from "./index";
 
 // OpenCode Zen - simulated provider for demo/dev use
 // In production, replace with real API endpoint
 export const opencodeZenProvider: ProviderAdapter = {
   name: "OpenCode Zen",
   slug: "opencode-zen",
-  fetchUsage: async (apiKey: string): Promise<ProviderUsage> => {
+  fetchUsage: async (_ctx: ProviderContext): Promise<ProviderUsage> => {
     try {
       // Simulated usage - in production, call the real API
       // For now, return random usage data that changes over time

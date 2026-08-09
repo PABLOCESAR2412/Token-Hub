@@ -1,11 +1,11 @@
-import type { ProviderAdapter, ProviderUsage } from "./index";
+import type { ProviderAdapter, ProviderUsage, ProviderContext } from "./index";
 
 // NVIDIA NGC / Build API - fetches GPU usage and credits
 // Docs: https://docs.nvidia.com/cloud-native/ngc/
 export const nvidiaProvider: ProviderAdapter = {
   name: "NVIDIA",
   slug: "nvidia",
-  fetchUsage: async (apiKey: string): Promise<ProviderUsage> => {
+  fetchUsage: async ({ apiKey }: ProviderContext): Promise<ProviderUsage> => {
     try {
       // NVIDIA Build API credits endpoint
       const res = await fetch("https://integrate.api.nvidia.com/v1/credits", {

@@ -29,21 +29,29 @@ export const Route = createFileRoute("/api/cron/poll-usage")({
           }
 
           try {
-            const apiKey = decrypt(token.encryptedValue);
-            const usage = await providerAdapter.fetchUsage(apiKey);
-            if (usage.tokensUsed > 0 || usage.cost > 0) {
-              // Providers may return per-model detail; store one snapshot per model.
+            const usage = await providerAdapter.fetchUsage({
+              apiKey: decrypt(token.encryptedValue),
+              publicKey: token.publicKey ? decrypt(token.publicKey) : null,
+              trackingKey: token.trackingKey ? decrypt(token.trackingKey) : null,
+              baseUrl: token.baseUrl ?? null,
+            });
+            if (usage.tokensUsed > 0 || usage.cost > 0 || (usage.daily && usage.daily.length > 0)) {
+              // Providers may return per-day detail; store one snapshot per day.
+              const days = usage.daily?.length
+                ? usage.daily
+                : [{ timestamp: new Date().toISOString(), tokensUsed: usage.tokensUsed, cost: usage.cost, model: null }];
               const details = usage.models?.length ? usage.models : [{ model: null, tokensUsed: usage.tokensUsed, cost: usage.cost }];
-              for (const d of details) {
+              for (const d of days) {
                 await adapter.addSnapshot(token.id, {
                   tokensUsed: d.tokensUsed,
                   cost: d.cost,
-                  model: d.model,
-                  inputTokens: d.inputTokens ?? 0,
-                  outputTokens: d.outputTokens ?? 0,
-                  latencyMs: d.latencyMs ?? null,
-                  tokensPerSecond: d.tokensPerSecond ?? null,
+                  model: d.model ?? null,
+                  inputTokens: 0,
+                  outputTokens: 0,
+                  latencyMs: null,
+                  tokensPerSecond: null,
                   provider: token.provider,
+                  timestamp: d.timestamp,
                 });
               }
               results.push({ tokenId: token.id, provider: token.provider, success: true });

@@ -12,7 +12,7 @@ const prisma = new PrismaClient();
 async function ensureAuthRow(): Promise<string> {
   let row = await prisma.authConfig.findUnique({ where: { id: "owner" } });
 
-  const hash = hashRevealSecret(DEFAULT_PASSWORD);
+  const hash = await hashRevealSecret(DEFAULT_PASSWORD);
 
   if (!row) {
     row = await prisma.authConfig.create({
@@ -41,7 +41,7 @@ export async function getAuthState(): Promise<{ mustChangePassword: boolean }> {
 export async function verifyOwnerPassword(password: string): Promise<boolean> {
   if (!password) return false;
   const hash = await ensureAuthRow();
-  return verifyRevealSecret(password, hash);
+  return await verifyRevealSecret(password, hash);
 }
 
 export async function changeOwnerPassword(currentPassword: string, newPassword: string): Promise<{ ok: boolean; error?: string }> {
@@ -56,7 +56,7 @@ export async function changeOwnerPassword(currentPassword: string, newPassword: 
   }
   await prisma.authConfig.update({
     where: { id: "owner" },
-    data: { passwordHash: hashRevealSecret(newPassword), mustChangePassword: false },
+    data: { passwordHash: await hashRevealSecret(newPassword), mustChangePassword: false },
   });
   return { ok: true };
 }

@@ -1,5 +1,6 @@
 import type { StorageAdapter, Token, UsageSnapshot, TokenWithUsage, CreateTokenInput, UpdateTokenInput, UsageSnapshotInput } from "./index";
 import { hashRevealSecret, verifyRevealSecret } from "../reveal";
+import { generateTotpSecret, verifyTotp } from "../totp";
 
 const TOKENS_KEY = "ath_tokens";
 const SNAPSHOTS_KEY = "ath_snapshots";
@@ -20,6 +21,7 @@ const SEED_TOKENS: Token[] = [
     totalCost: 247.83,
     createdAt: "2026-01-15T10:30:00.000Z",
     hasRevealSecret: false,
+    hasTotp: false,
   },
   {
     id: "tok_002",
@@ -31,6 +33,7 @@ const SEED_TOKENS: Token[] = [
     totalCost: 89.12,
     createdAt: "2026-02-03T14:20:00.000Z",
     hasRevealSecret: false,
+    hasTotp: false,
   },
   {
     id: "tok_003",
@@ -42,6 +45,7 @@ const SEED_TOKENS: Token[] = [
     totalCost: 12.40,
     createdAt: "2026-03-01T08:15:00.000Z",
     hasRevealSecret: false,
+    hasTotp: false,
   },
 ];
 
@@ -117,7 +121,16 @@ export const localAdapter: StorageAdapter = {
       totalCost: 0,
       createdAt: new Date().toISOString(),
       hasRevealSecret: !!input.revealSecret,
-      ...(input.revealSecret ? { revealSecretHash: hashRevealSecret(input.revealSecret) } : {}),
+      hasTotp: false,
+      ...(input.revealSecret ? { revealSecretHash: await hashRevealSecret(input.revealSecret) } : {}),
+      hasPublicKey: !!input.publicKey,
+      hasTrackingKey: !!input.trackingKey,
+      publicKeyMasked: input.publicKey ? maskKey(input.publicKey) : null,
+      trackingKeyMasked: input.trackingKey ? maskKey(input.trackingKey) : null,
+      ...(input.publicKey ? { publicKey: "enc_" + input.publicKey } : {}),
+      ...(input.trackingKey ? { trackingKey: "enc_" + input.trackingKey } : {}),
+      ...(input.baseUrl ? { baseUrl: input.baseUrl } : {}),
+      ...(input.notes ? { notes: input.notes } : {}),
     };
     tokens.push(newToken);
     localStorage.setItem(TOKENS_KEY, JSON.stringify(tokens));
@@ -136,9 +149,21 @@ export const localAdapter: StorageAdapter = {
       tokens[idx].maskedValue = maskKey(input.apiKey);
     }
     if (input.revealSecret !== undefined) {
-      tokens[idx].revealSecretHash = hashRevealSecret(input.revealSecret);
+      tokens[idx].revealSecretHash = await hashRevealSecret(input.revealSecret);
       tokens[idx].hasRevealSecret = true;
     }
+    if (input.publicKey !== undefined) {
+      tokens[idx].publicKey = input.publicKey ? "enc_" + input.publicKey : undefined;
+      tokens[idx].hasPublicKey = !!input.publicKey;
+      tokens[idx].publicKeyMasked = input.publicKey ? maskKey(input.publicKey) : null;
+    }
+    if (input.trackingKey !== undefined) {
+      tokens[idx].trackingKey = input.trackingKey ? "enc_" + input.trackingKey : undefined;
+      tokens[idx].hasTrackingKey = !!input.trackingKey;
+      tokens[idx].trackingKeyMasked = input.trackingKey ? maskKey(input.trackingKey) : null;
+    }
+    if (input.baseUrl !== undefined) tokens[idx].baseUrl = input.baseUrl ?? null;
+    if (input.notes !== undefined) tokens[idx].notes = input.notes ?? null;
     localStorage.setItem(TOKENS_KEY, JSON.stringify(tokens));
     return tokens[idx];
   },
@@ -169,7 +194,7 @@ export const localAdapter: StorageAdapter = {
       latencyMs: usage.latencyMs ?? null,
       tokensPerSecond: usage.tokensPerSecond ?? null,
       provider: usage.provider ?? null,
-      timestamp: new Date().toISOString(),
+      timestamp: usage.timestamp ?? new Date().toISOString(),
     };
     snaps.push(snap);
     localStorage.setItem(SNAPSHOTS_KEY, JSON.stringify(snaps));
@@ -183,13 +208,55 @@ export const localAdapter: StorageAdapter = {
     return snap;
   },
 
-  revealToken: async (tokenId: string, revealSecret: string) => {
+  revealToken: async (tokenId: string, revealSecret: string, code?: string) => {
     const tokens: Token[] = JSON.parse(localStorage.getItem(TOKENS_KEY) || "[]");
     const token = tokens.find((t) => t.id === tokenId);
     if (!token) return { ok: false, error: "Token no encontrado" };
-    if (!verifyRevealSecret(revealSecret, token.revealSecretHash)) {
+    if (!(await verifyRevealSecret(revealSecret, token.revealSecretHash))) {
       return { ok: false, error: "// Clave incorrecta" };
     }
-    return { ok: true, key: token.encryptedValue.replace(/^enc_/, "") };
+    if (token.totpSecret) {
+      if (!code) return { ok: false, error: "// Se requiere el codigo 2FA" };
+      const valid = await verifyTotp(token.totpSecret, code);
+      if (!valid) return { ok: false, error: "// Codigo 2FA incorrecto" };
+    }
+    return {
+      ok: true,
+      key: token.encryptedValue.replace(/^enc_/, ""),
+      publicKey: token.publicKey ? token.publicKey.replace(/^enc_/, "") : null,
+      trackingKey: token.trackingKey ? token.trackingKey.replace(/^enc_/, "") : null,
+      baseUrl: token.baseUrl ?? null,
+      notes: token.notes ?? null,
+    };
+  },
+
+  setupTotp: async (tokenId: string) => {
+    const tokens: Token[] = JSON.parse(localStorage.getItem(TOKENS_KEY) || "[]");
+    const token = tokens.find((t) => t.id === tokenId);
+    if (!token) throw new Error("Token no encontrado");
+    return generateTotpSecret(token.name || "token");
+  },
+
+  enableTotp: async (tokenId: string, secret: string, code: string) => {
+    const tokens: Token[] = JSON.parse(localStorage.getItem(TOKENS_KEY) || "[]");
+    const idx = tokens.findIndex((t) => t.id === tokenId);
+    if (idx === -1) return { ok: false, error: "Token no encontrado" };
+    const valid = await verifyTotp(secret, code);
+    if (!valid) return { ok: false, error: "// Codigo 2FA incorrecto" };
+    tokens[idx].totpSecret = secret;
+    tokens[idx].hasTotp = true;
+    localStorage.setItem(TOKENS_KEY, JSON.stringify(tokens));
+    return { ok: true };
+  },
+
+  disableTotp: async (tokenId: string) => {
+    const tokens: Token[] = JSON.parse(localStorage.getItem(TOKENS_KEY) || "[]");
+    const idx = tokens.findIndex((t) => t.id === tokenId);
+    if (idx !== -1) {
+      delete tokens[idx].totpSecret;
+      tokens[idx].hasTotp = false;
+      localStorage.setItem(TOKENS_KEY, JSON.stringify(tokens));
+    }
+    return { ok: true };
   },
 };
