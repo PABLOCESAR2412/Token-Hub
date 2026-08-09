@@ -15,6 +15,10 @@ function TokenForm() {
     name: "",
     provider: "openrouter",
     apiKey: "",
+    publicKey: "",
+    trackingKey: "",
+    baseUrl: "",
+    notes: "",
     quota: 0,
     revealSecret: "",
   });
@@ -33,6 +37,10 @@ function TokenForm() {
         apiKey: form.apiKey,
         quota: form.quota,
         ...(form.revealSecret.trim() ? { revealSecret: form.revealSecret } : {}),
+        ...(form.publicKey.trim() ? { publicKey: form.publicKey } : {}),
+        ...(form.trackingKey.trim() ? { trackingKey: form.trackingKey } : {}),
+        ...(form.baseUrl.trim() ? { baseUrl: form.baseUrl } : {}),
+        ...(form.notes.trim() ? { notes: form.notes } : {}),
       },
       {
         onSuccess: () => navigate({ to: "/" }),
@@ -106,6 +114,67 @@ function TokenForm() {
           <p className="font-mono text-xs text-bone/40 mt-1.5">
             {"> la clave se encripta y nunca se muestra completa"}
           </p>
+        </div>
+
+        <div>
+          <label className="block font-mono text-xs uppercase text-bone/50 mb-2">
+            [ Public Key (opcional) ]
+          </label>
+          <input
+            type="password"
+            value={form.publicKey}
+            onChange={(e) => setForm({ ...form, publicKey: e.target.value })}
+            placeholder="pk-lf-... (Langfuse)"
+            className={inputClass}
+          />
+          <p className="font-mono text-xs text-bone/40 mt-1.5">
+            {"> se usa junto a la API Key (p. ej. Langfuse public key) para métricas"}
+          </p>
+        </div>
+
+        <div>
+          <label className="block font-mono text-xs uppercase text-bone/50 mb-2">
+            [ Tracking Key (opcional) ]
+          </label>
+          <input
+            type="password"
+            value={form.trackingKey}
+            onChange={(e) => setForm({ ...form, trackingKey: e.target.value })}
+            placeholder="sk/trk-... (métricas por token)"
+            className={inputClass}
+          />
+          <p className="font-mono text-xs text-bone/40 mt-1.5">
+            {"> clave secundaria para proveedores que expongan métricas por token"}
+          </p>
+        </div>
+
+        <div>
+          <label className="block font-mono text-xs uppercase text-bone/50 mb-2">
+            [ Base URL (opcional) ]
+          </label>
+          <input
+            type="text"
+            value={form.baseUrl}
+            onChange={(e) => setForm({ ...form, baseUrl: e.target.value })}
+            placeholder="https://cloud.langfuse.com"
+            className={inputClass}
+          />
+          <p className="font-mono text-xs text-bone/40 mt-1.5">
+            {"> override del endpoint del proveedor (default = cloud.langfuse.com)"}
+          </p>
+        </div>
+
+        <div>
+          <label className="block font-mono text-xs uppercase text-bone/50 mb-2">
+            [ Notas (opcional) ]
+          </label>
+          <textarea
+            value={form.notes}
+            onChange={(e) => setForm({ ...form, notes: e.target.value })}
+            placeholder="Observaciones libres..."
+            rows={2}
+            className={inputClass}
+          />
         </div>
 
         <div>

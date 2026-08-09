@@ -1,8 +1,10 @@
 import { createFileRoute, Link, useRouter } from "@tanstack/react-router";
-import { useToken, useDeleteToken, useAddSnapshot } from "../../lib/hooks";
+import { useToken, useDeleteToken, useAddSnapshot, useUpdateToken } from "../../lib/hooks";
 import { RevealKey } from "../../components/RevealKey";
 import { TotpSetup } from "../../components/TotpSetup";
 import { ConfirmDialog, useConfirmDialog } from "../../components/ConfirmDialog";
+import { PROVIDER_CATALOG } from "../../lib/providers/catalog";
+import type { Token } from "../../lib/types";
 import {
   ArrowLeft,
   Trash2,
@@ -11,6 +13,8 @@ import {
   Zap,
   Shield,
   Plus,
+  Pencil,
+  Save,
 } from "lucide-react";
 import * as React from "react";
 
@@ -23,6 +27,7 @@ function TokenDetail() {
   const { data: token, isLoading } = useToken(tokenId);
   const deleteToken = useDeleteToken();
   const addSnapshot = useAddSnapshot();
+  const updateToken = useUpdateToken();
   const router = useRouter();
   const { dialog, open, close } = useConfirmDialog();
   const [isDeleting, setIsDeleting] = React.useState(false);
@@ -126,6 +131,12 @@ function TokenDetail() {
           Cuota: {token.quota === 0 ? "Ilimitada" : token.quota.toLocaleString()}
         </div>
       </div>
+
+      <EditTokenCard
+        token={token}
+        isPending={updateToken.isPending}
+        onSave={(input) => updateToken.mutate(input)}
+      />
 
       <div className="bg-pure/40 border border-bone/20 p-5">
         <div className="flex items-center gap-2 font-mono text-xs text-bone/50 uppercase mb-4">
@@ -308,6 +319,232 @@ function ManualUsageCard({
             </button>
           </div>
           {error && <div className="sm:col-span-3 font-mono text-xs text-red-400 mt-1">{error}</div>}
+        </form>
+      )}
+    </div>
+  );
+}
+
+function EditTokenCard({
+  token,
+  isPending,
+  onSave,
+}: {
+  token: Token;
+  isPending: boolean;
+  onSave: (input: import("../../lib/types").UpdateTokenInput) => void;
+}) {
+  const [open, setOpen] = React.useState(false);
+  const [message, setMessage] = React.useState<string | null>(null);
+  const [error, setError] = React.useState<string | null>(null);
+  const wasPending = React.useRef(false);
+  const [form, setForm] = React.useState({
+    name: token.name,
+    provider: token.provider,
+    apiKey: "",
+    quota: String(token.quota),
+    publicKey: "",
+    trackingKey: "",
+    baseUrl: token.baseUrl ?? "",
+    notes: token.notes ?? "",
+    revealSecret: "",
+  });
+
+  const inputClass =
+    "w-full bg-pure border border-bone/20 focus:border-electric outline-none px-3 py-2.5 text-sm font-mono placeholder:text-bone/30 transition-colors";
+
+  React.useEffect(() => {
+    if (wasPending.current && !isPending) {
+      setMessage("// Cambios guardados");
+    }
+    wasPending.current = isPending;
+    if (!isPending) {
+      // Re-sync preview fields when the token refetches after a successful update.
+      setForm((f) => ({
+        ...f,
+        name: token.name,
+        quota: String(token.quota),
+        baseUrl: token.baseUrl ?? "",
+        notes: token.notes ?? "",
+      }));
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [token.name, token.quota, token.baseUrl, token.notes, isPending]);
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!form.name.trim()) {
+      setError("// ERROR: El nombre no puede estar vacío");
+      return;
+    }
+    setError(null);
+    setMessage(null);
+    onSave({
+      id: token.id,
+      name: form.name.trim(),
+      provider: form.provider,
+      quota: parseInt(form.quota) || 0,
+      ...(form.apiKey.trim() ? { apiKey: form.apiKey } : {}),
+      ...(form.publicKey.trim() ? { publicKey: form.publicKey } : {}),
+      ...(form.trackingKey.trim() ? { trackingKey: form.trackingKey } : {}),
+      ...(form.baseUrl.trim() ? { baseUrl: form.baseUrl.trim() } : {}),
+      ...(form.notes.trim() ? { notes: form.notes.trim() } : {}),
+      ...(form.revealSecret.trim() ? { revealSecret: form.revealSecret } : {}),
+    });
+    setForm((f) => ({ ...f, apiKey: "", publicKey: "", trackingKey: "", revealSecret: "" }));
+  };
+
+  return (
+    <div className="bg-pure/40 border border-bone/20 p-5">
+      <div className="flex items-center justify-between mb-4">
+        <div className="flex items-center gap-2 font-mono text-xs text-bone/50 uppercase">
+          <Pencil size={13} /> Editar token
+        </div>
+        <button
+          onClick={() => setOpen((o) => !o)}
+          className="font-mono text-xs uppercase text-electric border border-electric/40 px-3 py-1.5 hover:bg-electric/10 transition-colors"
+        >
+          {open ? "[ Cerrar ]" : "[ Editar ]"}
+        </button>
+      </div>
+
+      {message && (
+        <div className="font-mono text-xs text-emerald-400 bg-emerald-950/30 border border-emerald-500/30 px-3 py-2 mb-4">
+          {message}
+        </div>
+      )}
+      {error && (
+        <div className="font-mono text-xs text-red-400 bg-red-950/30 border border-red-500/30 px-3 py-2 mb-4">
+          {error}
+        </div>
+      )}
+
+      {open && (
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div>
+              <label className="block font-mono text-xs uppercase text-bone/50 mb-1.5">[ Nombre ]</label>
+              <input
+                type="text"
+                value={form.name}
+                onChange={(e) => setForm({ ...form, name: e.target.value })}
+                className={inputClass}
+              />
+            </div>
+            <div>
+              <label className="block font-mono text-xs uppercase text-bone/50 mb-1.5">[ Proveedor ]</label>
+              <select
+                value={form.provider}
+                onChange={(e) => setForm({ ...form, provider: e.target.value })}
+                className={inputClass + " uppercase"}
+              >
+                {PROVIDER_CATALOG.map((p) => (
+                  <option key={p.slug} value={p.slug}>
+                    {p.label}
+                  </option>
+                ))}
+              </select>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div>
+              <label className="block font-mono text-xs uppercase text-bone/50 mb-1.5">
+                [ API Key (vacío = mantener) ]
+              </label>
+              <input
+                type="password"
+                value={form.apiKey}
+                onChange={(e) => setForm({ ...form, apiKey: e.target.value })}
+                placeholder="Dejar vacío para no cambiarla"
+                className={inputClass}
+              />
+            </div>
+            <div>
+              <label className="block font-mono text-xs uppercase text-bone/50 mb-1.5">
+                [ Cuota | 0 = ilimitada ]
+              </label>
+              <input
+                type="number"
+                value={form.quota}
+                onChange={(e) => setForm({ ...form, quota: e.target.value })}
+                className={inputClass}
+              />
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div>
+              <label className="block font-mono text-xs uppercase text-bone/50 mb-1.5">
+                [ Public Key (vacío = mantener) ]
+              </label>
+              <input
+                type="password"
+                value={form.publicKey}
+                onChange={(e) => setForm({ ...form, publicKey: e.target.value })}
+                placeholder="pk-lf-... (Langfuse)"
+                className={inputClass}
+              />
+            </div>
+            <div>
+              <label className="block font-mono text-xs uppercase text-bone/50 mb-1.5">
+                [ Tracking Key (vacío = mantener) ]
+              </label>
+              <input
+                type="password"
+                value={form.trackingKey}
+                onChange={(e) => setForm({ ...form, trackingKey: e.target.value })}
+                placeholder="sk/trk-... (métricas por token)"
+                className={inputClass}
+              />
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div>
+              <label className="block font-mono text-xs uppercase text-bone/50 mb-1.5">
+                [ Base URL ]
+              </label>
+              <input
+                type="text"
+                value={form.baseUrl}
+                onChange={(e) => setForm({ ...form, baseUrl: e.target.value })}
+                placeholder="https://cloud.langfuse.com"
+                className={inputClass}
+              />
+            </div>
+            <div>
+              <label className="block font-mono text-xs uppercase text-bone/50 mb-1.5">
+                [ Clave para ver (vacío = mantener) ]
+              </label>
+              <input
+                type="password"
+                value={form.revealSecret}
+                onChange={(e) => setForm({ ...form, revealSecret: e.target.value })}
+                placeholder="Para mostrar la key"
+                className={inputClass}
+              />
+            </div>
+          </div>
+
+          <div>
+            <label className="block font-mono text-xs uppercase text-bone/50 mb-1.5">[ Notas ]</label>
+            <textarea
+              value={form.notes}
+              onChange={(e) => setForm({ ...form, notes: e.target.value })}
+              rows={2}
+              className={inputClass}
+            />
+          </div>
+
+          <button
+            type="submit"
+            disabled={isPending}
+            className="w-full flex items-center justify-center gap-2 bg-electric text-bone px-4 py-3 font-mono text-sm uppercase font-bold hover:opacity-90 disabled:opacity-50 transition-all"
+          >
+            <Save size={14} />
+            {isPending ? "[ Guardando... ]" : "[ Guardar cambios ]"}
+          </button>
         </form>
       )}
     </div>

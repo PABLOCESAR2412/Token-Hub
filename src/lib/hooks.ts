@@ -71,7 +71,10 @@ export function useUpdateToken() {
       const fns = await getServerFns();
       return (await fns.updateToken({ data: input })) as Token;
     },
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["tokens"] }),
+    onSuccess: (_data, vars) => {
+      qc.invalidateQueries({ queryKey: ["tokens"] });
+      qc.invalidateQueries({ queryKey: ["token", vars.id] });
+    },
   });
 }
 
