@@ -34,14 +34,16 @@ export interface StorageAdapter {
   getTokens: () => Promise<Token[]>;
   getToken: (id: string) => Promise<TokenWithUsage | null>;
   addToken: (input: CreateTokenInput) => Promise<Token>;
-  updateToken: (input: UpdateTokenInput) => Promise<Token>;
+  updateToken: (input: UpdateTokenInput, code?: string) => Promise<Token>;
   deleteToken: (id: string) => Promise<void>;
   getSnapshots: (tokenId: string) => Promise<UsageSnapshot[]>;
   addSnapshot: (tokenId: string, usage: UsageSnapshotInput) => Promise<UsageSnapshot>;
   revealToken: (tokenId: string, revealSecret: string, code?: string) => Promise<RevealResult>;
-  setupTotp: (tokenId: string) => Promise<TotpSetupResult>;
-  enableTotp: (tokenId: string, secret: string, code: string) => Promise<RevealResult>;
-  disableTotp: (tokenId: string) => Promise<RevealResult>;
+  getTotpStatus: () => Promise<{ enabled: boolean }>;
+  setupTotp: () => Promise<TotpSetupResult>;
+  enableTotp: (secret: string, code: string) => Promise<RevealResult>;
+  disableTotp: () => Promise<RevealResult>;
+  verifyTotpCode: (code: string) => Promise<boolean>;
 }
 
 async function loadAdapter(): Promise<StorageAdapter> {

@@ -11,6 +11,7 @@ import * as React from "react";
 import { useTokens, useDeleteToken } from "../lib/hooks";
 import type { Token } from "../lib/types";
 import { ConfirmDialog, useConfirmDialog } from "../components/ConfirmDialog";
+import { TotpSetup } from "../components/TotpSetup";
 import { Trash2, Eye } from "lucide-react";
 
 export const Route = createFileRoute("/")({
@@ -222,6 +223,10 @@ function Dashboard() {
           close();
         }}
       />
+
+      <div className="bg-pure/40 border border-bone/20 p-5">
+        <TotpSetup />
+      </div>
     </div>
   );
 }

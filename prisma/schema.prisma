@@ -61,6 +61,7 @@ model AuthConfig {
   id                String   @id @default("owner") // single row
   passwordHash      String   // scrypt hash of the owner password
   mustChangePassword Boolean  @default(true)
+  totpSecret        String?  // global base32 TOTP secret (shared across all tokens)
   createdAt         DateTime @default(now())
   updatedAt         DateTime @updatedAt
 }

@@ -63,10 +63,10 @@ export function useAddToken() {
 export function useUpdateToken() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async (input: UpdateTokenInput): Promise<Token> => {
+    mutationFn: async (input: UpdateTokenInput & { code?: string }): Promise<Token> => {
       if (isDemo) {
         const adapter = await loadAdapter();
-        return await adapter.updateToken(input);
+        return await adapter.updateToken(input, input.code);
       }
       const fns = await getServerFns();
       return (await fns.updateToken({ data: input })) as Token;
@@ -74,6 +74,7 @@ export function useUpdateToken() {
     onSuccess: (_data, vars) => {
       qc.invalidateQueries({ queryKey: ["tokens"] });
       qc.invalidateQueries({ queryKey: ["token", vars.id] });
+      qc.invalidateQueries({ queryKey: ["totp-status"] });
     },
   });
 }
@@ -122,15 +123,29 @@ export function useRevealToken() {
   });
 }
 
-export function useSetupTotp() {
-  return useMutation({
-    mutationFn: async (tokenId: string): Promise<TotpSetupResult> => {
+export function useTotpStatus() {
+  return useQuery({
+    queryKey: ["totp-status"],
+    queryFn: async (): Promise<{ enabled: boolean }> => {
       if (isDemo) {
         const adapter = await loadAdapter();
-        return await adapter.setupTotp(tokenId);
+        return await adapter.getTotpStatus();
       }
       const fns = await getServerFns();
-      return (await fns.setupTotp({ data: tokenId })) as TotpSetupResult;
+      return (await fns.getTotpStatus()) as { enabled: boolean };
+    },
+  });
+}
+
+export function useSetupTotp() {
+  return useMutation({
+    mutationFn: async (): Promise<TotpSetupResult> => {
+      if (isDemo) {
+        const adapter = await loadAdapter();
+        return await adapter.setupTotp();
+      }
+      const fns = await getServerFns();
+      return (await fns.setupTotp()) as TotpSetupResult;
     },
   });
 }
@@ -138,16 +153,17 @@ export function useSetupTotp() {
 export function useEnableTotp() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async (input: { tokenId: string; secret: string; code: string }): Promise<RevealResult> => {
+    mutationFn: async (input: { secret: string; code: string }): Promise<RevealResult> => {
       if (isDemo) {
         const adapter = await loadAdapter();
-        return await adapter.enableTotp(input.tokenId, input.secret, input.code);
+        return await adapter.enableTotp(input.secret, input.code);
       }
       const fns = await getServerFns();
       return (await fns.enableTotp({ data: input })) as RevealResult;
     },
-    onSuccess: (_data, vars) => {
-      qc.invalidateQueries({ queryKey: ["token", vars.tokenId] });
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["totp-status"] });
+      qc.invalidateQueries({ queryKey: ["token"] });
       qc.invalidateQueries({ queryKey: ["tokens"] });
     },
   });
@@ -156,17 +172,31 @@ export function useEnableTotp() {
 export function useDisableTotp() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async (tokenId: string): Promise<RevealResult> => {
+    mutationFn: async (): Promise<RevealResult> => {
       if (isDemo) {
         const adapter = await loadAdapter();
-        return await adapter.disableTotp(tokenId);
+        return await adapter.disableTotp();
       }
       const fns = await getServerFns();
-      return (await fns.disableTotp({ data: tokenId })) as RevealResult;
+      return (await fns.disableTotp()) as RevealResult;
     },
-    onSuccess: (_data, vars) => {
-      qc.invalidateQueries({ queryKey: ["token", vars] });
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["totp-status"] });
+      qc.invalidateQueries({ queryKey: ["token"] });
       qc.invalidateQueries({ queryKey: ["tokens"] });
+    },
+  });
+}
+
+export function useVerifyTotpCode() {
+  return useMutation({
+    mutationFn: async (code: string): Promise<boolean> => {
+      if (isDemo) {
+        const adapter = await loadAdapter();
+        return await adapter.verifyTotpCode(code);
+      }
+      const fns = await getServerFns();
+      return (await fns.verifyTotpCode({ data: code })) as boolean;
     },
   });
 }

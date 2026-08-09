@@ -21,7 +21,26 @@ function slugify(value: string): string {
   );
 }
 
-function mapToken(db: any): Token {
+async function getGlobalTotpSecret(): Promise<string | null> {
+  const row = await prisma.authConfig.findUnique({ where: { id: "owner" } });
+  return row?.totpSecret ?? null;
+}
+
+async function getGlobalTotpStatus(): Promise<{ enabled: boolean }> {
+  return { enabled: !!(await getGlobalTotpSecret()) };
+}
+
+async function requireGlobalCode(code?: string): Promise<{ ok: boolean; error?: string }> {
+  const secret = await getGlobalTotpSecret();
+  if (!secret) return { ok: true };
+  if (!code) return { ok: false, error: "// Se requiere el codigo 2FA" };
+  const valid = await verifyTotp(secret, code);
+  if (!valid) return { ok: false, error: "// Codigo 2FA incorrecto" };
+  return { ok: true };
+}
+
+async function mapToken(db: any): Promise<Token> {
+  const totp = await getGlobalTotpStatus();
   return {
     id: db.id,
     name: db.name,
@@ -32,7 +51,7 @@ function mapToken(db: any): Token {
     totalCost: db.totalCost,
     createdAt: db.createdAt.toISOString(),
     hasRevealSecret: !!db.revealSecretHash,
-    hasTotp: !!db.totpSecret,
+    hasTotp: totp.enabled,
     resetAt: db.resetAt ? db.resetAt.toISOString() : null,
     hasPublicKey: !!db.publicKey,
     hasTrackingKey: !!db.trackingKey,
@@ -67,7 +86,7 @@ export const supabaseAdapter: StorageAdapter = {
       include: { provider: true },
       orderBy: { createdAt: "desc" },
     });
-    return rows.map(mapToken);
+    return Promise.all(rows.map(mapToken));
   },
 
   getToken: async (id: string) => {
@@ -76,7 +95,8 @@ export const supabaseAdapter: StorageAdapter = {
       include: { provider: true, snapshots: { orderBy: { timestamp: "desc" } } },
     });
     if (!row) return null;
-    return { ...mapToken(row), snapshots: row.snapshots.map(mapSnapshot) };
+    const mapped = await mapToken(row);
+    return { ...mapped, snapshots: row.snapshots.map(mapSnapshot) };
   },
 
   addToken: async (input: CreateTokenInput) => {
@@ -105,7 +125,9 @@ export const supabaseAdapter: StorageAdapter = {
     return mapToken(row);
   },
 
-  updateToken: async (input: UpdateTokenInput) => {
+  updateToken: async (input: UpdateTokenInput, code?: string) => {
+    const gate = await requireGlobalCode(code);
+    if (!gate.ok) return Promise.reject(new Error(gate.error));
     const data: Record<string, any> = {};
     if (input.name !== undefined) data.name = input.name;
     if (input.quota !== undefined) data.quota = input.quota;
@@ -171,11 +193,8 @@ export const supabaseAdapter: StorageAdapter = {
     if (!(await verifyRevealSecret(revealSecret, row.revealSecretHash))) {
       return { ok: false, error: "// Clave incorrecta" };
     }
-    if (row.totpSecret) {
-      if (!code) return { ok: false, error: "// Se requiere el codigo 2FA" };
-      const valid = await verifyTotp(row.totpSecret, code);
-      if (!valid) return { ok: false, error: "// Codigo 2FA incorrecto" };
-    }
+    const gate = await requireGlobalCode(code);
+    if (!gate.ok) return { ok: false, error: gate.error };
     return {
       ok: true,
       key: decrypt(row.encryptedValue),
@@ -186,23 +205,34 @@ export const supabaseAdapter: StorageAdapter = {
     };
   },
 
-  setupTotp: async (tokenId: string) => {
-    const row = await prisma.token.findUnique({ where: { id: tokenId } });
-    if (!row) throw new Error("Token no encontrado");
-    return generateTotpSecret(row.name || "token");
+  getTotpStatus: () => getGlobalTotpStatus(),
+
+  setupTotp: async () => {
+    return generateTotpSecret("owner@agent-token-hub");
   },
 
-  enableTotp: async (tokenId: string, secret: string, code: string) => {
-    const row = await prisma.token.findUnique({ where: { id: tokenId } });
-    if (!row) return { ok: false, error: "Token no encontrado" };
+  enableTotp: async (secret: string, code: string) => {
     const valid = await verifyTotp(secret, code);
     if (!valid) return { ok: false, error: "// Codigo 2FA incorrecto" };
-    await prisma.token.update({ where: { id: tokenId }, data: { totpSecret: secret } });
+    await prisma.authConfig.upsert({
+      where: { id: "owner" },
+      update: { totpSecret: secret },
+      create: { id: "owner", passwordHash: "pending", mustChangePassword: true, totpSecret: secret },
+    });
     return { ok: true };
   },
 
-  disableTotp: async (tokenId: string) => {
-    await prisma.token.update({ where: { id: tokenId }, data: { totpSecret: null } });
+  disableTotp: async () => {
+    await prisma.authConfig.update({
+      where: { id: "owner" },
+      data: { totpSecret: null },
+    });
     return { ok: true };
+  },
+
+  verifyTotpCode: async (code: string) => {
+    const secret = await getGlobalTotpSecret();
+    if (!secret) return false;
+    return verifyTotp(secret, code);
   },
 };

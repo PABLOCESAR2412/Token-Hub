@@ -1,8 +1,10 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useAddToken } from "../../lib/hooks";
 import { PROVIDER_CATALOG } from "../../lib/providers/catalog";
+import { getProviderGuide, providerHasAnalytics } from "../../lib/providers/guides";
+import { ProviderHelpDialog, ProviderHelpTrigger } from "../../components/ProviderHelp";
 import * as React from "react";
-import { ArrowLeft } from "lucide-react";
+import { ArrowLeft, BarChart2, XCircle } from "lucide-react";
 
 export const Route = createFileRoute("/token/new")({
   component: TokenForm,
@@ -23,11 +25,32 @@ function TokenForm() {
     revealSecret: "",
   });
   const [error, setError] = React.useState("");
+  const [showHelp, setShowHelp] = React.useState(false);
+
+  const guide = getProviderGuide(form.provider);
+  const hasAnalytics = providerHasAnalytics(form.provider);
+  const needs = guide?.requiredFields ?? ["apiKey"];
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!form.name.trim() || !form.apiKey.trim()) {
-      setError("// ERROR: Nombre y API Key son obligatorios");
+    if (!form.name.trim()) {
+      setError("// ERROR: El nombre es obligatorio");
+      return;
+    }
+    if (needs.includes("apiKey") && !form.apiKey.trim()) {
+      setError("// ERROR: API Key es obligatoria para este proveedor");
+      return;
+    }
+    if (needs.includes("publicKey") && !form.publicKey.trim()) {
+      setError("// ERROR: Public Key es obligatoria para este proveedor");
+      return;
+    }
+    if (needs.includes("baseUrl") && !form.baseUrl.trim()) {
+      setError("// ERROR: Base URL es obligatoria para este proveedor");
+      return;
+    }
+    if (!form.apiKey.trim() && !needs.includes("apiKey")) {
+      setError("// ERROR: Ingresa la API Key");
       return;
     }
     addToken.mutate(
@@ -88,7 +111,10 @@ function TokenForm() {
         </div>
 
         <div>
-          <label className="block font-mono text-xs uppercase text-bone/50 mb-2">[ Proveedor ]</label>
+          <div className="flex items-center justify-between mb-2">
+            <label className="block font-mono text-xs uppercase text-bone/50">[ Proveedor ]</label>
+            <ProviderHelpTrigger onClick={() => setShowHelp(true)} />
+          </div>
           <select
             value={form.provider}
             onChange={(e) => setForm({ ...form, provider: e.target.value })}
@@ -100,10 +126,24 @@ function TokenForm() {
               </option>
             ))}
           </select>
+          <div
+            className={`mt-2 font-mono text-xs border px-3 py-2 flex items-center gap-2 ${
+              hasAnalytics
+                ? "text-emerald-400 border-emerald-500/30 bg-emerald-950/30"
+                : "text-bone/60 border-bone/20 bg-bone/5"
+            }`}
+          >
+            {hasAnalytics ? <BarChart2 size={13} /> : <XCircle size={13} />}
+            {hasAnalytics
+              ? "Analiticas disponibles para este proveedor."
+              : "AVISO: este proveedor no expone analiticas de uso."}
+          </div>
         </div>
 
         <div>
-          <label className="block font-mono text-xs uppercase text-bone/50 mb-2">[ API Key ]</label>
+          <label className="block font-mono text-xs uppercase text-bone/50 mb-2">
+            [ API Key{needs.includes("apiKey") ? " *" : ""} ]
+          </label>
           <input
             type="password"
             value={form.apiKey}
@@ -111,14 +151,16 @@ function TokenForm() {
             placeholder="sk-..."
             className={inputClass}
           />
-          <p className="font-mono text-xs text-bone/40 mt-1.5">
-            {"> la clave se encripta y nunca se muestra completa"}
-          </p>
+          {needs.includes("apiKey") && (
+            <p className="font-mono text-xs text-bone/40 mt-1.5">
+              {"> * obligatorio para este proveedor"}
+            </p>
+          )}
         </div>
 
         <div>
           <label className="block font-mono text-xs uppercase text-bone/50 mb-2">
-            [ Public Key (opcional) ]
+            [ Public Key{needs.includes("publicKey") ? " *" : " (opcional)"} ]
           </label>
           <input
             type="password"
@@ -127,9 +169,15 @@ function TokenForm() {
             placeholder="pk-lf-... (Langfuse)"
             className={inputClass}
           />
-          <p className="font-mono text-xs text-bone/40 mt-1.5">
-            {"> se usa junto a la API Key (p. ej. Langfuse public key) para métricas"}
-          </p>
+          {needs.includes("publicKey") ? (
+            <p className="font-mono text-xs text-bone/40 mt-1.5">
+              {"> * obligatorio para este proveedor"} (p. ej. Langfuse public key)
+            </p>
+          ) : (
+            <p className="font-mono text-xs text-bone/40 mt-1.5">
+              {"> se usa junto a la API Key (p. ej. Langfuse public key) para métricas"}
+            </p>
+          )}
         </div>
 
         <div>
@@ -150,7 +198,7 @@ function TokenForm() {
 
         <div>
           <label className="block font-mono text-xs uppercase text-bone/50 mb-2">
-            [ Base URL (opcional) ]
+            [ Base URL{needs.includes("baseUrl") ? " *" : " (opcional)"} ]
           </label>
           <input
             type="text"
@@ -160,7 +208,9 @@ function TokenForm() {
             className={inputClass}
           />
           <p className="font-mono text-xs text-bone/40 mt-1.5">
-            {"> override del endpoint del proveedor (default = cloud.langfuse.com)"}
+            {needs.includes("baseUrl")
+              ? "> * obligatorio para este proveedor"
+              : "> override del endpoint del proveedor (default = cloud.langfuse.com)"}
           </p>
         </div>
 
@@ -213,6 +263,8 @@ function TokenForm() {
           {addToken.isPending ? "[ Guardando... ]" : "[ Guardar Token ] ->"}
         </button>
       </form>
+
+      {showHelp && <ProviderHelpDialog provider={form.provider} onClose={() => setShowHelp(false)} />}
     </div>
   );
 }

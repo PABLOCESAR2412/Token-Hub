@@ -1,5 +1,6 @@
 import { PrismaClient } from "@prisma/client";
 import { hashRevealSecret, verifyRevealSecret } from "./reveal";
+import { verifyTotp } from "./totp";
 
 export const DEFAULT_PASSWORD = "admin123";
 
@@ -53,6 +54,26 @@ export async function changeOwnerPassword(currentPassword: string, newPassword: 
   }
   if (newPassword === currentPassword) {
     return { ok: false, error: "// Debe ser distinta a la actual" };
+  }
+  await setOwnerPassword(newPassword);
+  return { ok: true };
+}
+
+export async function getTotpEnabled(): Promise<boolean> {
+  const row = await prisma.authConfig.findUnique({ where: { id: "owner" } });
+  return !!row?.totpSecret;
+}
+
+export async function verifyOwnerTotp(code: string): Promise<boolean> {
+  const row = await prisma.authConfig.findUnique({ where: { id: "owner" } });
+  if (!row?.totpSecret) return false;
+  return await verifyTotp(row.totpSecret, code);
+}
+
+/** Sets a new owner password (used by both normal and recovery flows). */
+export async function setOwnerPassword(newPassword: string): Promise<{ ok: boolean; error?: string }> {
+  if (typeof newPassword !== "string" || newPassword.length < 8) {
+    return { ok: false, error: "// La nueva contraseña debe tener al menos 8 caracteres" };
   }
   await prisma.authConfig.update({
     where: { id: "owner" },

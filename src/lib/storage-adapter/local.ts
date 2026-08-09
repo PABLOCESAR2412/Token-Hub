@@ -4,6 +4,31 @@ import { generateTotpSecret, verifyTotp } from "../totp";
 
 const TOKENS_KEY = "ath_tokens";
 const SNAPSHOTS_KEY = "ath_snapshots";
+const TOTP_KEY = "ath_totp_global";
+
+function getGlobalTotpSecret(): string | null {
+  if (typeof window === "undefined") return null;
+  const raw = localStorage.getItem(TOTP_KEY);
+  if (!raw) return null;
+  try {
+    return JSON.parse(raw).secret ?? null;
+  } catch {
+    return null;
+  }
+}
+
+async function getGlobalTotpStatus(): Promise<{ enabled: boolean }> {
+  return { enabled: !!getGlobalTotpSecret() };
+}
+
+async function requireGlobalCode(code?: string): Promise<{ ok: boolean; error?: string }> {
+  const secret = getGlobalTotpSecret();
+  if (!secret) return { ok: true };
+  if (!code) return { ok: false, error: "// Se requiere el codigo 2FA" };
+  const valid = await verifyTotp(secret, code);
+  if (!valid) return { ok: false, error: "// Codigo 2FA incorrecto" };
+  return { ok: true };
+}
 
 function maskKey(raw: string): string {
   if (raw.length <= 8) return "sk-***";
@@ -97,7 +122,9 @@ export const localAdapter: StorageAdapter = {
   getTokens: async () => {
     ensureSeed();
     const raw = localStorage.getItem(TOKENS_KEY);
-    return raw ? JSON.parse(raw) : [];
+    const tokens: Token[] = raw ? JSON.parse(raw) : [];
+    const globalEnabled = await getGlobalTotpStatus();
+    return tokens.map((t) => ({ ...t, hasTotp: globalEnabled.enabled }));
   },
 
   getToken: async (id: string) => {
@@ -106,7 +133,8 @@ export const localAdapter: StorageAdapter = {
     const snapshots: UsageSnapshot[] = JSON.parse(localStorage.getItem(SNAPSHOTS_KEY) || "[]");
     const token = tokens.find((t) => t.id === id);
     if (!token) return null;
-    return { ...token, snapshots: snapshots.filter((s) => s.tokenId === id) };
+    const globalEnabled = await getGlobalTotpStatus();
+    return { ...token, hasTotp: globalEnabled.enabled, snapshots: snapshots.filter((s) => s.tokenId === id) };
   },
 
   addToken: async (input: CreateTokenInput) => {
@@ -137,7 +165,9 @@ export const localAdapter: StorageAdapter = {
     return newToken;
   },
 
-  updateToken: async (input: UpdateTokenInput) => {
+  updateToken: async (input: UpdateTokenInput, code?: string) => {
+    const gate = await requireGlobalCode(code);
+    if (!gate.ok) throw new Error(gate.error);
     const tokens: Token[] = JSON.parse(localStorage.getItem(TOKENS_KEY) || "[]");
     const idx = tokens.findIndex((t) => t.id === input.id);
     if (idx === -1) throw new Error("Token not found");
@@ -215,11 +245,8 @@ export const localAdapter: StorageAdapter = {
     if (!(await verifyRevealSecret(revealSecret, token.revealSecretHash))) {
       return { ok: false, error: "// Clave incorrecta" };
     }
-    if (token.totpSecret) {
-      if (!code) return { ok: false, error: "// Se requiere el codigo 2FA" };
-      const valid = await verifyTotp(token.totpSecret, code);
-      if (!valid) return { ok: false, error: "// Codigo 2FA incorrecto" };
-    }
+    const gate = await requireGlobalCode(code);
+    if (!gate.ok) return { ok: false, error: gate.error };
     return {
       ok: true,
       key: token.encryptedValue.replace(/^enc_/, ""),
@@ -230,33 +257,27 @@ export const localAdapter: StorageAdapter = {
     };
   },
 
-  setupTotp: async (tokenId: string) => {
-    const tokens: Token[] = JSON.parse(localStorage.getItem(TOKENS_KEY) || "[]");
-    const token = tokens.find((t) => t.id === tokenId);
-    if (!token) throw new Error("Token no encontrado");
-    return generateTotpSecret(token.name || "token");
+  getTotpStatus: () => getGlobalTotpStatus(),
+
+  setupTotp: async () => {
+    return generateTotpSecret("owner@agent-token-hub");
   },
 
-  enableTotp: async (tokenId: string, secret: string, code: string) => {
-    const tokens: Token[] = JSON.parse(localStorage.getItem(TOKENS_KEY) || "[]");
-    const idx = tokens.findIndex((t) => t.id === tokenId);
-    if (idx === -1) return { ok: false, error: "Token no encontrado" };
+  enableTotp: async (secret: string, code: string) => {
     const valid = await verifyTotp(secret, code);
     if (!valid) return { ok: false, error: "// Codigo 2FA incorrecto" };
-    tokens[idx].totpSecret = secret;
-    tokens[idx].hasTotp = true;
-    localStorage.setItem(TOKENS_KEY, JSON.stringify(tokens));
+    localStorage.setItem(TOTP_KEY, JSON.stringify({ secret }));
     return { ok: true };
   },
 
-  disableTotp: async (tokenId: string) => {
-    const tokens: Token[] = JSON.parse(localStorage.getItem(TOKENS_KEY) || "[]");
-    const idx = tokens.findIndex((t) => t.id === tokenId);
-    if (idx !== -1) {
-      delete tokens[idx].totpSecret;
-      tokens[idx].hasTotp = false;
-      localStorage.setItem(TOKENS_KEY, JSON.stringify(tokens));
-    }
+  disableTotp: async () => {
+    localStorage.removeItem(TOTP_KEY);
     return { ok: true };
+  },
+
+  verifyTotpCode: async (code: string) => {
+    const secret = getGlobalTotpSecret();
+    if (!secret) return false;
+    return verifyTotp(secret, code);
   },
 };

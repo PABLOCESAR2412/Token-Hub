@@ -13,6 +13,7 @@ import { Route as IndexRouteImport } from './routes/index'
 import { Route as TokenTokenIdRouteImport } from './routes/token/$tokenId'
 import { Route as TokenNewRouteImport } from './routes/token/new'
 import { Route as ApiAuthChangePasswordRouteImport } from './routes/api/auth/change-password'
+import { Route as ApiAuthForgotPasswordRouteImport } from './routes/api/auth/forgot-password'
 import { Route as ApiAuthLoginRouteImport } from './routes/api/auth/login'
 import { Route as ApiAuthLogoutRouteImport } from './routes/api/auth/logout'
 import { Route as ApiAuthSessionRouteImport } from './routes/api/auth/session'
@@ -36,6 +37,11 @@ const TokenNewRoute = TokenNewRouteImport.update({
 const ApiAuthChangePasswordRoute = ApiAuthChangePasswordRouteImport.update({
   id: '/api/auth/change-password',
   path: '/api/auth/change-password',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiAuthForgotPasswordRoute = ApiAuthForgotPasswordRouteImport.update({
+  id: '/api/auth/forgot-password',
+  path: '/api/auth/forgot-password',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ApiAuthLoginRoute = ApiAuthLoginRouteImport.update({
@@ -64,6 +70,7 @@ export interface FileRoutesByFullPath {
   '/token/$tokenId': typeof TokenTokenIdRoute
   '/token/new': typeof TokenNewRoute
   '/api/auth/change-password': typeof ApiAuthChangePasswordRoute
+  '/api/auth/forgot-password': typeof ApiAuthForgotPasswordRoute
   '/api/auth/login': typeof ApiAuthLoginRoute
   '/api/auth/logout': typeof ApiAuthLogoutRoute
   '/api/auth/session': typeof ApiAuthSessionRoute
@@ -74,6 +81,7 @@ export interface FileRoutesByTo {
   '/token/$tokenId': typeof TokenTokenIdRoute
   '/token/new': typeof TokenNewRoute
   '/api/auth/change-password': typeof ApiAuthChangePasswordRoute
+  '/api/auth/forgot-password': typeof ApiAuthForgotPasswordRoute
   '/api/auth/login': typeof ApiAuthLoginRoute
   '/api/auth/logout': typeof ApiAuthLogoutRoute
   '/api/auth/session': typeof ApiAuthSessionRoute
@@ -85,6 +93,7 @@ export interface FileRoutesById {
   '/token/$tokenId': typeof TokenTokenIdRoute
   '/token/new': typeof TokenNewRoute
   '/api/auth/change-password': typeof ApiAuthChangePasswordRoute
+  '/api/auth/forgot-password': typeof ApiAuthForgotPasswordRoute
   '/api/auth/login': typeof ApiAuthLoginRoute
   '/api/auth/logout': typeof ApiAuthLogoutRoute
   '/api/auth/session': typeof ApiAuthSessionRoute
@@ -97,6 +106,7 @@ export interface FileRouteTypes {
     | '/token/$tokenId'
     | '/token/new'
     | '/api/auth/change-password'
+    | '/api/auth/forgot-password'
     | '/api/auth/login'
     | '/api/auth/logout'
     | '/api/auth/session'
@@ -107,6 +117,7 @@ export interface FileRouteTypes {
     | '/token/$tokenId'
     | '/token/new'
     | '/api/auth/change-password'
+    | '/api/auth/forgot-password'
     | '/api/auth/login'
     | '/api/auth/logout'
     | '/api/auth/session'
@@ -117,6 +128,7 @@ export interface FileRouteTypes {
     | '/token/$tokenId'
     | '/token/new'
     | '/api/auth/change-password'
+    | '/api/auth/forgot-password'
     | '/api/auth/login'
     | '/api/auth/logout'
     | '/api/auth/session'
@@ -128,6 +140,7 @@ export interface RootRouteChildren {
   TokenTokenIdRoute: typeof TokenTokenIdRoute
   TokenNewRoute: typeof TokenNewRoute
   ApiAuthChangePasswordRoute: typeof ApiAuthChangePasswordRoute
+  ApiAuthForgotPasswordRoute: typeof ApiAuthForgotPasswordRoute
   ApiAuthLoginRoute: typeof ApiAuthLoginRoute
   ApiAuthLogoutRoute: typeof ApiAuthLogoutRoute
   ApiAuthSessionRoute: typeof ApiAuthSessionRoute
@@ -162,6 +175,13 @@ declare module '@tanstack/react-router' {
       path: '/api/auth/change-password'
       fullPath: '/api/auth/change-password'
       preLoaderRoute: typeof ApiAuthChangePasswordRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/auth/forgot-password': {
+      id: '/api/auth/forgot-password'
+      path: '/api/auth/forgot-password'
+      fullPath: '/api/auth/forgot-password'
+      preLoaderRoute: typeof ApiAuthForgotPasswordRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/api/auth/login': {
@@ -200,6 +220,7 @@ const rootRouteChildren: RootRouteChildren = {
   TokenTokenIdRoute: TokenTokenIdRoute,
   TokenNewRoute: TokenNewRoute,
   ApiAuthChangePasswordRoute: ApiAuthChangePasswordRoute,
+  ApiAuthForgotPasswordRoute: ApiAuthForgotPasswordRoute,
   ApiAuthLoginRoute: ApiAuthLoginRoute,
   ApiAuthLogoutRoute: ApiAuthLogoutRoute,
   ApiAuthSessionRoute: ApiAuthSessionRoute,

@@ -3,7 +3,7 @@ import { useSession } from "../lib/use-session";
 import { Logo } from "./Logo";
 
 export function ChangePasswordScreen() {
-  const { changePassword } = useSession();
+  const { changePassword, recovery } = useSession();
   const [current, setCurrent] = React.useState("");
   const [next, setNext] = React.useState("");
   const [confirm, setConfirm] = React.useState("");
@@ -12,8 +12,12 @@ export function ChangePasswordScreen() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!current || !next || !confirm) {
+    if (!next || !confirm) {
       setError("// ERROR: Completa todos los campos");
+      return;
+    }
+    if (!recovery && !current) {
+      setError("// ERROR: Ingresa la contraseña actual");
       return;
     }
     if (next !== confirm) {
@@ -44,12 +48,16 @@ export function ChangePasswordScreen() {
         <div className="flex flex-col items-center gap-4 text-center">
           <Logo className="w-14 h-14" />
           <div>
-            <div className="font-mono text-xs uppercase text-electric mb-2">[ SEGURIDAD // FORZOSO ]</div>
+            <div className="font-mono text-xs uppercase text-electric mb-2">
+              {recovery ? "[ RECUPERACION // 2FA OK ]" : "[ SEGURIDAD // FORZOSO ]"}
+            </div>
             <h1 className="font-sans font-black text-2xl uppercase tracking-tighter leading-none">
               Cambiar contraseña
             </h1>
             <p className="font-mono text-xs text-bone/40 mt-3">
-              {"> debes establecer una contraseña propia antes de continuar"}
+              {recovery
+                ? "> 2FA verificado. Establecé una nueva contraseña."
+                : "> debes establecer una contraseña propia antes de continuar"}
             </p>
           </div>
         </div>
@@ -60,19 +68,21 @@ export function ChangePasswordScreen() {
           </div>
         )}
 
-        <div>
-          <label className="block font-mono text-xs uppercase text-bone/50 mb-2">
-            [ Actual ]
-          </label>
-          <input
-            type="password"
-            value={current}
-            onChange={(e) => setCurrent(e.target.value)}
-            autoFocus
-            placeholder="••••••••"
-            className={inputClass}
-          />
-        </div>
+        {!recovery && (
+          <div>
+            <label className="block font-mono text-xs uppercase text-bone/50 mb-2">
+              [ Actual ]
+            </label>
+            <input
+              type="password"
+              value={current}
+              onChange={(e) => setCurrent(e.target.value)}
+              autoFocus
+              placeholder="••••••••"
+              className={inputClass}
+            />
+          </div>
+        )}
 
         <div>
           <label className="block font-mono text-xs uppercase text-bone/50 mb-2">
@@ -82,6 +92,7 @@ export function ChangePasswordScreen() {
             type="password"
             value={next}
             onChange={(e) => setNext(e.target.value)}
+            autoFocus={recovery}
             placeholder="Nueva contraseña"
             className={inputClass}
           />

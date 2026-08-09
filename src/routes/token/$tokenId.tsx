@@ -1,9 +1,10 @@
 import { createFileRoute, Link, useRouter } from "@tanstack/react-router";
-import { useToken, useDeleteToken, useAddSnapshot, useUpdateToken } from "../../lib/hooks";
+import { useToken, useDeleteToken, useAddSnapshot, useUpdateToken, useTotpStatus } from "../../lib/hooks";
 import { RevealKey } from "../../components/RevealKey";
-import { TotpSetup } from "../../components/TotpSetup";
 import { ConfirmDialog, useConfirmDialog } from "../../components/ConfirmDialog";
 import { PROVIDER_CATALOG } from "../../lib/providers/catalog";
+import { getProviderGuide, providerHasAnalytics } from "../../lib/providers/guides";
+import { ProviderHelpDialog, ProviderHelpTrigger } from "../../components/ProviderHelp";
 import type { Token } from "../../lib/types";
 import {
   ArrowLeft,
@@ -142,11 +143,7 @@ function TokenDetail() {
         <div className="flex items-center gap-2 font-mono text-xs text-bone/50 uppercase mb-4">
           <Shield size={13} /> Revelar key
         </div>
-        <RevealKey tokenId={token.id} hasRevealSecret={token.hasRevealSecret} hasTotp={token.hasTotp} />
-      </div>
-
-      <div className="bg-pure/40 border border-bone/20 p-5">
-        <TotpSetup tokenId={token.id} hasTotp={token.hasTotp} />
+        <RevealKey tokenId={token.id} hasRevealSecret={token.hasRevealSecret} />
       </div>
 
       <AnalyticsCard daily={daily} maxUsed={maxUsed} snapshots={snapshots} />
@@ -332,12 +329,16 @@ function EditTokenCard({
 }: {
   token: Token;
   isPending: boolean;
-  onSave: (input: import("../../lib/types").UpdateTokenInput) => void;
+  onSave: (input: import("../../lib/types").UpdateTokenInput & { code?: string }) => void;
 }) {
   const [open, setOpen] = React.useState(false);
   const [message, setMessage] = React.useState<string | null>(null);
   const [error, setError] = React.useState<string | null>(null);
+  const [showHelp, setShowHelp] = React.useState(false);
+  const [code, setCode] = React.useState("");
   const wasPending = React.useRef(false);
+  const totpStatus = useTotpStatus();
+  const hasTotp = totpStatus.data?.enabled === true;
   const [form, setForm] = React.useState({
     name: token.name,
     provider: token.provider,
@@ -352,6 +353,17 @@ function EditTokenCard({
 
   const inputClass =
     "w-full bg-pure border border-bone/20 focus:border-electric outline-none px-3 py-2.5 text-sm font-mono placeholder:text-bone/30 transition-colors";
+
+  const guide = getProviderGuide(form.provider);
+  const hasAnalytics = providerHasAnalytics(form.provider);
+  const needs = guide?.requiredFields ?? ["apiKey"];
+
+  // Auto-dismiss the success banner a few seconds after it appears.
+  React.useEffect(() => {
+    if (!message) return;
+    const id = setTimeout(() => setMessage(null), 4000);
+    return () => clearTimeout(id);
+  }, [message]);
 
   React.useEffect(() => {
     if (wasPending.current && !isPending) {
@@ -377,6 +389,10 @@ function EditTokenCard({
       setError("// ERROR: El nombre no puede estar vacío");
       return;
     }
+    if (hasTotp && !/^\d{6}$/.test(code)) {
+      setError("// Ingresa el codigo 2FA de 6 digitos");
+      return;
+    }
     setError(null);
     setMessage(null);
     onSave({
@@ -390,8 +406,10 @@ function EditTokenCard({
       ...(form.baseUrl.trim() ? { baseUrl: form.baseUrl.trim() } : {}),
       ...(form.notes.trim() ? { notes: form.notes.trim() } : {}),
       ...(form.revealSecret.trim() ? { revealSecret: form.revealSecret } : {}),
+      ...(hasTotp && code ? { code } : {}),
     });
     setForm((f) => ({ ...f, apiKey: "", publicKey: "", trackingKey: "", revealSecret: "" }));
+    setCode("");
   };
 
   return (
@@ -432,7 +450,10 @@ function EditTokenCard({
               />
             </div>
             <div>
-              <label className="block font-mono text-xs uppercase text-bone/50 mb-1.5">[ Proveedor ]</label>
+              <div className="flex items-center justify-between mb-1.5">
+                <label className="block font-mono text-xs uppercase text-bone/50">[ Proveedor ]</label>
+                <ProviderHelpTrigger onClick={() => setShowHelp(true)} />
+              </div>
               <select
                 value={form.provider}
                 onChange={(e) => setForm({ ...form, provider: e.target.value })}
@@ -444,13 +465,24 @@ function EditTokenCard({
                   </option>
                 ))}
               </select>
+              <div
+                className={`mt-2 font-mono text-xs border px-3 py-2 ${
+                  hasAnalytics
+                    ? "text-emerald-400 border-emerald-500/30 bg-emerald-950/30"
+                    : "text-bone/60 border-bone/20 bg-bone/5"
+                }`}
+              >
+                {hasAnalytics
+                  ? "Analiticas disponibles para este proveedor."
+                  : "AVISO: este proveedor no expone analiticas de uso."}
+              </div>
             </div>
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
               <label className="block font-mono text-xs uppercase text-bone/50 mb-1.5">
-                [ API Key (vacío = mantener) ]
+                [ API Key{needs.includes("apiKey") ? " *" : ""} (vacío = mantener) ]
               </label>
               <input
                 type="password"
@@ -476,7 +508,7 @@ function EditTokenCard({
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
               <label className="block font-mono text-xs uppercase text-bone/50 mb-1.5">
-                [ Public Key (vacío = mantener) ]
+                [ Public Key{needs.includes("publicKey") ? " *" : ""} (vacío = mantener) ]
               </label>
               <input
                 type="password"
@@ -503,7 +535,7 @@ function EditTokenCard({
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
               <label className="block font-mono text-xs uppercase text-bone/50 mb-1.5">
-                [ Base URL ]
+                [ Base URL{needs.includes("baseUrl") ? " *" : ""} ]
               </label>
               <input
                 type="text"
@@ -537,6 +569,27 @@ function EditTokenCard({
             />
           </div>
 
+          {hasTotp && (
+            <div>
+              <label className="block font-mono text-xs uppercase text-bone/50 mb-1.5">
+                [ Codigo 2FA * ]
+              </label>
+              <input
+                type="text"
+                inputMode="numeric"
+                pattern="[0-9]*"
+                maxLength={6}
+                value={code}
+                onChange={(e) => setCode(e.target.value.replace(/[^0-9]/g, ""))}
+                placeholder="000000"
+                className={inputClass + " tracking-[0.5em]"}
+              />
+              <p className="font-mono text-xs text-bone/40 mt-1.5">
+                {"> requerido para guardar cambios mientras el 2FA este activo"}
+              </p>
+            </div>
+          )}
+
           <button
             type="submit"
             disabled={isPending}
@@ -547,6 +600,8 @@ function EditTokenCard({
           </button>
         </form>
       )}
+
+      {showHelp && <ProviderHelpDialog provider={form.provider} onClose={() => setShowHelp(false)} />}
     </div>
   );
 }

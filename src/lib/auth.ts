@@ -17,34 +17,52 @@ function sign(payload: string): string {
   return createHmac("sha256", authPassword()).update(payload).digest("base64url");
 }
 
+export type SessionKind = "session" | "recovery";
+
 /**
- * Creates a signed session token: `<expiresUnix>:<signature>`.
- * The signature covers `<expiresUnix>` so it cannot be tampered with.
+ * Creates a signed session token: `<expires>:<kind>.<signature>`.
+ * The signature covers `<expires>:<kind>` so it cannot be tampered with.
  */
-export function createSessionToken(): string {
+export function createSessionToken(kind: SessionKind = "session"): string {
   const expires = Math.floor(Date.now() / 1000) + SESSION_TTL_SECONDS;
-  const payload = String(expires);
+  const payload = `${expires}:${kind}`;
   return `${payload}.${sign(payload)}`;
 }
 
 export function verifySessionToken(token: string | undefined): boolean {
-  if (!token) return false;
-  const parts = token.split(".");
-  if (parts.length !== 2) return false;
-  const [expiresRaw, sig] = parts;
-  const expires = Number(expiresRaw);
-  if (!Number.isFinite(expires) || expires <= Math.floor(Date.now() / 1000)) return false;
+  return !!parseSessionToken(token);
+}
 
-  const expected = sign(expiresRaw);
+/** Returns the session kind for an authorized request, or null when invalid. */
+export function sessionKind(token: string | undefined): SessionKind | null {
+  const parsed = parseSessionToken(token);
+  return parsed ? parsed.kind : null;
+}
+
+function parseSessionToken(token: string | undefined): { kind: SessionKind } | null {
+  if (!token) return null;
+  const [payload, sig] = token.split(".");
+  if (!payload || !sig) return null;
+  const [expiresRaw, rawKind] = payload.split(":");
+  const expires = Number(expiresRaw);
+  if (!Number.isFinite(expires) || expires <= Math.floor(Date.now() / 1000)) return null;
+  const kind: SessionKind = rawKind === "recovery" ? "recovery" : "session";
+
+  const expected = sign(payload);
   const a = Buffer.from(sig);
   const b = Buffer.from(expected);
-  if (a.length !== b.length) return false;
-  return timingSafeEqual(a, b);
+  if (a.length !== b.length) return null;
+  return timingSafeEqual(a, b) ? { kind } : null;
 }
 
 export function isAuthorized(request: globalThis.Request): boolean {
   const cookie = readCookieFromHeader(request.headers.get("cookie") || "", COOKIE_NAME);
-  return verifySessionToken(cookie);
+  return !!verifySessionToken(cookie);
+}
+
+export function isRecoverySession(request: globalThis.Request): boolean {
+  const cookie = readCookieFromHeader(request.headers.get("cookie") || "", COOKIE_NAME);
+  return sessionKind(cookie) === "recovery";
 }
 
 function readCookieFromHeader(header: string, name: string): string | undefined {

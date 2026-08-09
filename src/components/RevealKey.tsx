@@ -1,5 +1,5 @@
 import * as React from "react";
-import { useRevealToken } from "../lib/hooks";
+import { useRevealToken, useTotpStatus } from "../lib/hooks";
 import { Eye, EyeOff } from "lucide-react";
 
 const REVEAL_MS = 10_000;
@@ -8,13 +8,13 @@ const TICK_MS = 100;
 export function RevealKey({
   tokenId,
   hasRevealSecret,
-  hasTotp,
 }: {
   tokenId: string;
   hasRevealSecret: boolean;
-  hasTotp: boolean;
 }) {
   const reveal = useRevealToken();
+  const totpStatus = useTotpStatus();
+  const hasTotp = totpStatus.data?.enabled === true;
   const [key, setKey] = React.useState<string | null>(null);
   const [secret, setSecret] = React.useState("");
   const [code, setCode] = React.useState("");

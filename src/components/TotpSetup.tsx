@@ -1,14 +1,17 @@
 import * as React from "react";
 import QRCode from "qrcode";
-import { useSetupTotp, useEnableTotp, useDisableTotp } from "../lib/hooks";
+import { useSetupTotp, useEnableTotp, useDisableTotp, useTotpStatus } from "../lib/hooks";
 import { Copy, Check, ShieldCheck, ShieldOff } from "lucide-react";
 import { ConfirmDialog, useConfirmDialog } from "./ConfirmDialog";
 
-export function TotpSetup({ tokenId, hasTotp }: { tokenId: string; hasTotp: boolean }) {
+export function TotpSetup() {
   const setup = useSetupTotp();
   const enable = useEnableTotp();
   const disable = useDisableTotp();
+  const status = useTotpStatus();
   const { dialog, open, close } = useConfirmDialog();
+
+  const hasTotp = status.data?.enabled === true;
 
   const [pending, setPending] = React.useState(false);
   const [secret, setSecret] = React.useState<string | null>(null);
@@ -37,7 +40,7 @@ export function TotpSetup({ tokenId, hasTotp }: { tokenId: string; hasTotp: bool
   const handleStart = async () => {
     setError(null);
     try {
-      const res: any = await setup.mutateAsync(tokenId);
+      const res: any = await setup.mutateAsync();
       setSecret(res.secret);
       setUri(res.uri);
       setPending(true);
@@ -54,7 +57,7 @@ export function TotpSetup({ tokenId, hasTotp }: { tokenId: string; hasTotp: bool
       setError("// Ingresa el codigo de 6 digitos");
       return;
     }
-    const res: any = await enable.mutateAsync({ tokenId, secret, code });
+    const res: any = await enable.mutateAsync({ secret, code });
     if (res?.ok) {
       setPending(false);
       setSecret(null);
@@ -68,13 +71,13 @@ export function TotpSetup({ tokenId, hasTotp }: { tokenId: string; hasTotp: bool
   const handleDisable = () => {
     open({
       title: "Desactivar 2FA",
-      message: `El token dejará de requerir codigo 2FA para revelar su key. ¿Desea continuar?`,
+      message: `El acceso dejara de requerir codigo 2FA para revelar keys y cambiar contraseñas. ¿Desea continuar?`,
       danger: true,
     });
   };
 
   const handleDisableConfirm = () => {
-    disable.mutate(tokenId, { onSettled: () => close() });
+    disable.mutate(undefined, { onSettled: () => close() });
   };
 
   const copyUri = async () => {
@@ -105,7 +108,7 @@ export function TotpSetup({ tokenId, hasTotp }: { tokenId: string; hasTotp: bool
           </button>
         </div>
         <p className="font-mono text-xs text-bone/40">
-          La key requiere tu clave de ver + un codigo 2FA de 6 digitos.
+          El 2FA es global: protege Revelar key, guardar cambios y el cambio de contraseña.
         </p>
       </div>
     );
@@ -115,7 +118,7 @@ export function TotpSetup({ tokenId, hasTotp }: { tokenId: string; hasTotp: bool
     <div className="space-y-3">
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2 font-mono text-xs text-bone/50 uppercase">
-          <ShieldCheck size={14} /> Autenticacion de 2 factores
+          <ShieldCheck size={14} /> Autenticacion de 2 factores (global)
         </div>
         {!pending && (
           <button
@@ -127,6 +130,10 @@ export function TotpSetup({ tokenId, hasTotp }: { tokenId: string; hasTotp: bool
           </button>
         )}
       </div>
+      <p className="font-mono text-xs text-bone/40">
+        Un solo 2FA para toda la app: al activarlo protege revelar keys, guardar cambios y el
+        cambio de contraseña.
+      </p>
 
       {pending && secret && (
         <div className="space-y-3 border border-dashed border-electric/40 p-4">

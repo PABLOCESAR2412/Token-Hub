@@ -30,11 +30,11 @@ export const addToken = createServerFn({ method: "POST" })
   });
 
 export const updateToken = createServerFn({ method: "POST" })
-  .validator((input: UpdateTokenInput) => input)
+  .validator((input: UpdateTokenInput & { code?: string }) => input)
   .handler(async ({ data }) => {
     if (!isAuthorized(getRequest())) return unauthorizedResponse();
     const adapter = await loadAdapter();
-    return await adapter.updateToken(data);
+    return await adapter.updateToken(data as UpdateTokenInput, data.code);
   });
 
 export const deleteToken = createServerFn({ method: "POST" })
@@ -63,30 +63,43 @@ export const revealToken = createServerFn({ method: "POST" })
     return await adapter.revealToken(data.tokenId, data.revealSecret, data.code);
   });
 
-export const setupTotp = createServerFn({ method: "POST" })
-  .validator((tokenId: string) => tokenId)
-  .handler(async ({ data }) => {
+export const getTotpStatus = createServerFn({ method: "GET" })
+  .handler(async () => {
     if (!isAuthorized(getRequest())) return unauthorizedResponse();
     const adapter = await loadAdapter();
-    return await adapter.setupTotp(data);
+    return await adapter.getTotpStatus();
+  });
+
+export const setupTotp = createServerFn({ method: "POST" })
+  .handler(async () => {
+    if (!isAuthorized(getRequest())) return unauthorizedResponse();
+    const adapter = await loadAdapter();
+    return await adapter.setupTotp();
   });
 
 export const enableTotp = createServerFn({ method: "POST" })
   .validator(
-    (input: { tokenId: string; secret: string; code: string }) => input
+    (input: { secret: string; code: string }) => input
   )
   .handler(async ({ data }) => {
     if (!isAuthorized(getRequest())) return unauthorizedResponse();
     const adapter = await loadAdapter();
-    return await adapter.enableTotp(data.tokenId, data.secret, data.code);
+    return await adapter.enableTotp(data.secret, data.code);
   });
 
 export const disableTotp = createServerFn({ method: "POST" })
-  .validator((tokenId: string) => tokenId)
+  .handler(async () => {
+    if (!isAuthorized(getRequest())) return unauthorizedResponse();
+    const adapter = await loadAdapter();
+    return await adapter.disableTotp();
+  });
+
+export const verifyTotpCode = createServerFn({ method: "POST" })
+  .validator((code: string) => code)
   .handler(async ({ data }) => {
     if (!isAuthorized(getRequest())) return unauthorizedResponse();
     const adapter = await loadAdapter();
-    return await adapter.disableTotp(data);
+    return await adapter.verifyTotpCode(data);
   });
 
 export const addSnapshot = createServerFn({ method: "POST" })
