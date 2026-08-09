@@ -8,11 +8,11 @@ import {
   type SortingState,
 } from "@tanstack/react-table";
 import * as React from "react";
-import { useTokens, useDeleteToken } from "../lib/hooks";
+import { useTokens, useDeleteToken, useSetTokenActive } from "../lib/hooks";
 import type { Token } from "../lib/types";
 import { ConfirmDialog, useConfirmDialog } from "../components/ConfirmDialog";
 import { TotpSetup } from "../components/TotpSetup";
-import { Trash2, Eye } from "lucide-react";
+import { Trash2, Eye, Pause, Play, Download, Search } from "lucide-react";
 
 export const Route = createFileRoute("/")({
   component: Dashboard,
@@ -21,8 +21,11 @@ export const Route = createFileRoute("/")({
 function Dashboard() {
   const { data: tokens = [], isLoading } = useTokens();
   const deleteToken = useDeleteToken();
+  const setActive = useSetTokenActive();
   const [sorting, setSorting] = React.useState<SortingState>([]);
   const [providerFilter, setProviderFilter] = React.useState("all");
+  const [tagFilter, setTagFilter] = React.useState("all");
+  const [search, setSearch] = React.useState("");
   const [pendingDelete, setPendingDelete] = React.useState<Token | null>(null);
   const { dialog, open, close } = useConfirmDialog();
 
@@ -31,10 +34,68 @@ function Dashboard() {
     return ["all", ...Array.from(set)];
   }, [tokens]);
 
+  const allTags = React.useMemo(() => {
+    const set = new Set<string>();
+    for (const t of tokens) for (const tag of t.tags ?? []) set.add(tag);
+    return Array.from(set);
+  }, [tokens]);
+
   const filteredTokens = React.useMemo(() => {
-    if (providerFilter === "all") return tokens;
-    return tokens.filter((t) => t.provider === providerFilter);
-  }, [tokens, providerFilter]);
+    let list = tokens;
+    if (providerFilter !== "all") list = list.filter((t) => t.provider === providerFilter);
+    if (tagFilter !== "all") list = list.filter((t) => (t.tags ?? []).includes(tagFilter));
+    if (search.trim()) {
+      const q = search.trim().toLowerCase();
+      list = list.filter(
+        (t) =>
+          t.name.toLowerCase().includes(q) ||
+          t.provider.toLowerCase().includes(q) ||
+          (t.agent ?? "").toLowerCase().includes(q) ||
+          (t.tags ?? []).some((tag) => tag.toLowerCase().includes(q))
+      );
+    }
+    return list;
+  }, [tokens, providerFilter, tagFilter, search]);
+
+  const agentTotals = React.useMemo(() => {
+    const map = new Map<string, { cost: number; tokens: number; active: number; total: number }>();
+    for (const t of tokens) {
+      const key = t.agent?.trim() || "sin agente";
+      const cur = map.get(key) || { cost: 0, tokens: 0, active: 0, total: 0 };
+      cur.cost += t.totalCost;
+      cur.tokens += 0;
+      cur.total += 1;
+      if (t.active) cur.active += 1;
+      map.set(key, cur);
+    }
+    return Array.from(map.entries())
+      .sort((a, b) => b[1].cost - a[1].cost)
+      .map(([agent, v]) => ({ agent, ...v }));
+  }, [tokens]);
+
+  const exportCsv = () => {
+    const esc = (v: unknown) => {
+      const s = String(v ?? "");
+      return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+    };
+    const rows: string[] = [["nombre", "proveedor", "agente", "estado", "cuota", "costo_usd", "max_usd", "tags"].join(",")];
+    for (const t of filteredTokens) {
+      rows.push(
+        [t.name, t.provider, t.agent ?? "", t.active ? "activo" : "pausado", t.quota, t.totalCost.toFixed(2), t.maxUsd ?? "", (t.tags ?? []).join("|")].map(esc).join(",")
+      );
+    }
+    const blob = new Blob([rows.join("\n")], { type: "text/csv;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `tokens-${new Date().toISOString().slice(0, 10)}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  const toggleActive = (t: Token) => {
+    setActive.mutate({ id: t.id, active: !t.active });
+  };
 
   const columns: ColumnDef<Token, any>[] = [
     {
@@ -86,6 +147,49 @@ function Dashboard() {
       ),
     },
     {
+      accessorKey: "active",
+      header: "Estado",
+      cell: (info) => {
+        const t = info.row.original;
+        const overCap = typeof t.maxUsd === "number" && t.maxUsd > 0 && t.totalCost > t.maxUsd;
+        return (
+          <span
+            className={`font-mono text-xs uppercase px-2 py-0.5 ${
+              !t.active
+                ? "text-red-400 border border-red-500/40"
+                : overCap
+                ? "text-amber-400 border border-amber-500/40"
+                : "text-emerald-400 border border-emerald-500/40"
+            }`}
+          >
+            {t.active ? (overCap ? "CAP EXCEDIDO" : "ACTIVO") : "PAUSADO"}
+          </span>
+        );
+      },
+    },
+    {
+      accessorKey: "agent",
+      header: "Agente",
+      cell: (info) => (
+        <span className="font-mono text-xs text-bone/60">
+          {info.getValue() || <span className="italic text-bone/30">sin agente</span>}
+        </span>
+      ),
+    },
+    {
+      accessorKey: "tags",
+      header: "Tags",
+      cell: (info) => (
+        <div className="flex flex-wrap gap-1 max-w-56">
+          {(info.getValue() as string[] | undefined)?.map((tag) => (
+            <span key={tag} className="font-mono text-[10px] uppercase border border-bone/20 px-1.5 py-0.5 text-bone/60">
+              #{tag}
+            </span>
+          ))}
+        </div>
+      ),
+    },
+    {
       accessorKey: "createdAt",
       header: "Creado",
       cell: (info) => (
@@ -99,6 +203,13 @@ function Dashboard() {
       header: "",
       cell: (info) => (
         <div className="flex gap-2 justify-end">
+          <button
+            onClick={() => toggleActive(info.row.original)}
+            className="text-bone/40 hover:text-electric transition-colors"
+            title={info.row.original.active ? "Pausar token" : "Activar token"}
+          >
+            {info.row.original.active ? <Pause size={15} /> : <Play size={15} />}
+          </button>
           <Link
             to="/token/$tokenId"
             params={{ tokenId: info.row.original.id }}
@@ -147,7 +258,28 @@ function Dashboard() {
             </span>
           </h1>
         </div>
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-3 flex-wrap">
+          <div className="relative">
+            <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-bone/40" />
+            <input
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Buscar nombre, proveedor, agente, tag..."
+              className="bg-pure border border-bone/20 focus:border-electric outline-none pl-9 pr-3 py-2 font-mono text-sm w-64"
+            />
+          </div>
+          <select
+            value={tagFilter}
+            onChange={(e) => setTagFilter(e.target.value)}
+            className="bg-pure border border-bone/20 focus:border-electric outline-none px-3 py-2 font-mono text-sm uppercase"
+          >
+            <option value="all">Todos los tags</option>
+            {allTags.map((tag) => (
+              <option key={tag} value={tag}>
+                #{tag}
+              </option>
+            ))}
+          </select>
           <select
             value={providerFilter}
             onChange={(e) => setProviderFilter(e.target.value)}
@@ -159,6 +291,13 @@ function Dashboard() {
               </option>
             ))}
           </select>
+          <button
+            onClick={exportCsv}
+            className="flex items-center gap-2 border border-bone/20 px-3 py-2 font-mono text-sm uppercase text-bone/70 hover:text-electric hover:border-electric/40 transition-colors"
+          >
+            <Download size={14} />
+            CSV
+          </button>
           <Link
             to="/token/new"
             className="bg-electric text-bone px-4 py-2 font-mono text-sm uppercase font-bold hover:opacity-90 transition-colors"
@@ -166,6 +305,18 @@ function Dashboard() {
             [+ Nuevo]
           </Link>
         </div>
+      </div>
+
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+        {agentTotals.map(({ agent, cost, active, total }) => (
+          <div key={agent} className="bg-pure/40 border border-bone/20 p-4">
+            <div className="font-mono text-[11px] uppercase text-bone/50 mb-2 truncate">-- {agent}</div>
+            <div className="font-mono text-xl font-bold text-electric">${cost.toFixed(2)}</div>
+            <div className="font-mono text-[11px] text-bone/40 mt-1">
+              {total} token{total === 1 ? "" : "s"} · {active} activo{active === 1 ? "" : "s"}
+            </div>
+          </div>
+        ))}
       </div>
 
       <div className="border border-bone/20 bg-pure/40 overflow-hidden">

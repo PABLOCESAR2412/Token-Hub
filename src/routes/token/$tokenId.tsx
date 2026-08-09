@@ -1,10 +1,11 @@
 import { createFileRoute, Link, useRouter } from "@tanstack/react-router";
-import { useToken, useDeleteToken, useAddSnapshot, useUpdateToken, useTotpStatus } from "../../lib/hooks";
+import { useToken, useDeleteToken, useAddSnapshot, useUpdateToken, useTotpStatus, useSetTokenActive, useAuditLog } from "../../lib/hooks";
 import { RevealKey } from "../../components/RevealKey";
 import { ConfirmDialog, useConfirmDialog } from "../../components/ConfirmDialog";
 import { PROVIDER_CATALOG } from "../../lib/providers/catalog";
 import { getProviderGuide, providerHasAnalytics } from "../../lib/providers/guides";
 import { ProviderHelpDialog, ProviderHelpTrigger } from "../../components/ProviderHelp";
+import { getProviderBySlug } from "../../lib/providers";
 import type { Token } from "../../lib/types";
 import {
   ArrowLeft,
@@ -16,6 +17,10 @@ import {
   Plus,
   Pencil,
   Save,
+  Pause,
+  Play,
+  Download,
+  Activity,
 } from "lucide-react";
 import * as React from "react";
 
@@ -29,6 +34,8 @@ function TokenDetail() {
   const deleteToken = useDeleteToken();
   const addSnapshot = useAddSnapshot();
   const updateToken = useUpdateToken();
+  const setActive = useSetTokenActive();
+  const { data: audit = [] } = useAuditLog(tokenId);
   const router = useRouter();
   const { dialog, open, close } = useConfirmDialog();
   const [isDeleting, setIsDeleting] = React.useState(false);
@@ -47,6 +54,21 @@ function TokenDetail() {
     return Array.from(map.entries())
       .sort((a, b) => a[0].localeCompare(b[0]))
       .slice(-30);
+  }, [snapshots]);
+
+  const byModel = React.useMemo(() => {
+    const map = new Map<string, { model: string; tokensUsed: number; cost: number; inputTokens: number; outputTokens: number; count: number }>();
+    for (const s of snapshots) {
+      const key = s.model || "sin modelo";
+      const cur = map.get(key) || { model: key, tokensUsed: 0, cost: 0, inputTokens: 0, outputTokens: 0, count: 0 };
+      cur.tokensUsed += s.tokensUsed;
+      cur.cost += s.cost;
+      cur.inputTokens += s.inputTokens ?? 0;
+      cur.outputTokens += s.outputTokens ?? 0;
+      cur.count += 1;
+      map.set(key, cur);
+    }
+    return Array.from(map.values()).sort((a, b) => b.cost - a.cost);
   }, [snapshots]);
 
   const maxUsed = Math.max(...daily.map(([, v]) => v.tokensUsed), 1);
@@ -86,10 +108,42 @@ function TokenDetail() {
           <h1 className="font-sans font-black text-3xl sm:text-4xl uppercase tracking-tighter leading-none truncate">
             {token.name}
           </h1>
+          <div className="flex flex-wrap gap-2 mt-2">
+            {token.tags?.map((tag) => (
+              <span key={tag} className="font-mono text-[10px] uppercase border border-bone/20 px-1.5 py-0.5 text-bone/60">
+                #{tag}
+              </span>
+            ))}
+            {token.agent && (
+              <span className="font-mono text-[10px] uppercase border border-electric/40 px-1.5 py-0.5 text-electric">
+                agente: {token.agent}
+              </span>
+            )}
+          </div>
         </div>
-        <button onClick={handleDelete} className="text-bone/40 hover:text-red-400 transition-colors">
-          <Trash2 size={18} />
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => setActive.mutate({ id: token.id, active: !token.active })}
+            className={`flex items-center gap-2 px-3 py-2 font-mono text-xs uppercase font-bold transition-colors ${
+              token.active
+                ? "border border-red-500/40 text-red-400 hover:bg-red-950/30"
+                : "border border-emerald-500/40 text-emerald-400 hover:bg-emerald-950/30"
+            }`}
+          >
+            {token.active ? (
+              <>
+                <Pause size={13} /> Pausar
+              </>
+            ) : (
+              <>
+                <Play size={13} /> Activar
+              </>
+            )}
+          </button>
+          <button onClick={handleDelete} className="text-bone/40 hover:text-red-400 transition-colors">
+            <Trash2 size={18} />
+          </button>
+        </div>
       </div>
 
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
@@ -123,6 +177,27 @@ function TokenDetail() {
             {new Date(token.createdAt).toLocaleDateString("es-ES")}
           </div>
         </div>
+        <div className="bg-pure/40 border border-bone/20 p-5">
+          <div className="flex items-center gap-2 font-mono text-xs text-bone/50 uppercase mb-3">
+            <Activity size={13} /> Max USD / mes
+          </div>
+          {typeof token.maxUsd === "number" && token.maxUsd > 0 ? (
+            <>
+              <div className="font-mono text-2xl font-bold">${token.maxUsd.toFixed(2)}</div>
+              <div className="font-mono text-xs mt-1">
+                {token.totalCost >= token.maxUsd ? (
+                  <span className="text-amber-400">[ CAP SUPERADO ]</span>
+                ) : (
+                  <span className="text-bone/40">
+                    {Math.max(1, Math.round((token.totalCost / token.maxUsd) * 100))}% usado · {Math.max(1, 100 - Math.round((token.totalCost / token.maxUsd) * 100))}% libre
+                  </span>
+                )}
+              </div>
+            </>
+          ) : (
+            <div className="font-mono text-sm font-bold text-bone/40 italic">Sin límite</div>
+          )}
+        </div>
       </div>
 
       <div className="bg-pure/40 border border-bone/20 p-5">
@@ -148,11 +223,17 @@ function TokenDetail() {
 
       <AnalyticsCard daily={daily} maxUsed={maxUsed} snapshots={snapshots} />
 
+      <ModelBreakdownCard byModel={byModel} />
+
+      <HealthProbeCard provider={token.provider} />
+
       <ManualUsageCard
         tokenId={token.id}
         isPending={addSnapshot.isPending}
-        onSave={(t, c) => addSnapshot.mutate({ tokenId, tokensUsed: t, cost: c })}
+        onSave={(t, c, model) => addSnapshot.mutate({ tokenId, tokensUsed: t, cost: c, model })}
       />
+
+      <AuditCard audit={audit} />
 
       <ConfirmDialog
         isOpen={dialog.open}
@@ -238,18 +319,180 @@ function AnalyticsCard({
   );
 }
 
+function ModelBreakdownCard({
+  byModel,
+}: {
+  byModel: Array<{ model: string; tokensUsed: number; cost: number; inputTokens: number; outputTokens: number; count: number }>;
+}) {
+  if (byModel.length === 0) return null;
+  const maxCost = Math.max(...byModel.map((m) => m.cost), 1);
+  const palette = ["bg-electric", "bg-amber-400", "bg-emerald-400", "bg-fuchsia-400", "bg-sky-400", "bg-orange-400"];
+  return (
+    <div className="bg-pure/40 border border-bone/20 p-5">
+      <div className="flex items-center justify-between mb-5">
+        <h3 className="font-sans font-bold uppercase tracking-tight">Consumo por modelo</h3>
+        <span className="font-mono text-xs text-bone/40">[i] últimos datos del cron</span>
+      </div>
+
+      <div className="flex h-6 overflow-hidden rounded mb-5">
+        {byModel.map((m, i) => (
+          <div
+            key={m.model}
+            className={palette[i % palette.length] + " h-full transition-all"}
+            style={{ width: `${(m.cost / maxCost) * 100}%` }}
+            title={`${m.model}: $${m.cost.toFixed(2)}`}
+          />
+        ))}
+      </div>
+
+      <div className="flex flex-wrap gap-x-6 gap-y-2 font-mono text-xs text-bone/50 mb-5">
+        {byModel.map((m, i) => (
+          <span key={m.model} className="flex items-center gap-2">
+            <span className={"w-2 h-2 inline-block " + palette[i % palette.length]} />
+            {m.model}
+          </span>
+        ))}
+      </div>
+
+      <div className="overflow-x-auto">
+        <table className="w-full text-sm">
+          <thead>
+            <tr className="border-b border-bone/20 font-mono text-xs uppercase tracking-widest text-bone/50">
+              <th className="px-3 py-2 text-left font-normal">Modelo</th>
+              <th className="px-3 py-2 text-right font-normal">Tokens</th>
+              <th className="px-3 py-2 text-right font-normal">In / Out</th>
+              <th className="px-3 py-2 text-right font-normal">Costo</th>
+              <th className="px-3 py-2 text-right font-normal">%</th>
+            </tr>
+          </thead>
+          <tbody>
+            {byModel.map((m, i) => (
+              <tr key={m.model} className="border-b border-bone/10 hover:bg-bone/5 transition-colors">
+                <td className="px-3 py-2.5 flex items-center gap-2">
+                  <span className={"w-2 h-2 inline-block " + palette[i % palette.length]} />
+                  <span className="font-mono text-xs">{m.model}</span>
+                </td>
+                <td className="px-3 py-2.5 font-mono text-sm text-right">{m.tokensUsed.toLocaleString()}</td>
+                <td className="px-3 py-2.5 font-mono text-xs text-bone/50 text-right">
+                  {(m.inputTokens || 0).toLocaleString()} / {(m.outputTokens || 0).toLocaleString()}
+                </td>
+                <td className="px-3 py-2.5 font-mono text-sm text-electric text-right">${m.cost.toFixed(2)}</td>
+                <td className="px-3 py-2.5 font-mono text-xs text-bone/40 text-right">
+                  {((m.cost / maxCost) * 100).toFixed(0)}%
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
+function HealthProbeCard({ provider }: { provider: string }) {
+  const [result, setResult] = React.useState<{ ok: boolean; message: string } | null>(null);
+  const [testing, setTesting] = React.useState(false);
+
+  const runProbe = async () => {
+    setTesting(true);
+    setResult(null);
+    try {
+      const adapter = getProviderBySlug(provider);
+      if (!adapter) {
+        setResult({ ok: false, message: "Proveedor no soportado" });
+        return;
+      }
+      const usage = await adapter.fetchUsage({
+        apiKey: "probe-for-health-check-only",
+        publicKey: null,
+        trackingKey: null,
+        baseUrl: null,
+      });
+      const raw = (usage.raw ?? {}) as Record<string, unknown>;
+      if (typeof raw.status === "number" && raw.status >= 400) {
+        setResult({ ok: Boolean(usage.tokensUsed || usage.cost), message: `HTTP ${raw.status} ${raw.statusText ?? ""} (endpoint sin credenciales válidas o requiere config)` });
+      } else if (raw.error) {
+        setResult({ ok: false, message: String(raw.error) });
+      } else {
+        setResult({ ok: true, message: "Endpoint alcanzable y respondiendo OK." });
+      }
+    } catch (err: any) {
+      setResult({ ok: false, message: err?.message || "Error de red" });
+    } finally {
+      setTesting(false);
+    }
+  };
+
+  return (
+    <div className="bg-pure/40 border border-bone/20 p-5">
+      <div className="flex items-center justify-between mb-4">
+        <div className="flex items-center gap-2 font-mono text-xs text-bone/50 uppercase">
+          <Activity size={13} /> Salud del proveedor
+        </div>
+        <button
+          onClick={runProbe}
+          disabled={testing}
+          className="font-mono text-xs uppercase text-electric border border-electric/40 px-3 py-1.5 hover:bg-electric/10 disabled:opacity-50 transition-colors"
+        >
+          {testing ? "[ Probando... ]" : "[ Probar endpoint ]"}
+        </button>
+      </div>
+      {result && (
+        <div
+          className={`font-mono text-xs border px-3 py-2 ${
+            result.ok ? "text-emerald-400 border-emerald-500/30 bg-emerald-950/30" : "text-amber-400 border-amber-500/30 bg-amber-950/30"
+          }`}
+        >
+          {result.ok ? "// OK " : "// "}
+          {result.message}
+        </div>
+      )}
+      <p className="font-mono text-[11px] text-bone/30 mt-3">
+        {"> comprueba que el endpoint del proveedor responde. Sin credenciales reales el resultado solo indica conectividad."}
+      </p>
+    </div>
+  );
+}
+
+function AuditCard({ audit }: { audit: Array<{ id: string; action: string; tokenName?: string | null; detail?: string | null; createdAt: string }> }) {
+  if (audit.length === 0) return null;
+  const actionColor: Record<string, string> = {
+    reveal: "text-amber-400",
+    create: "text-emerald-400",
+    update: "text-sky-400",
+    pause: "text-red-400",
+    activate: "text-emerald-400",
+    cap_exceeded: "text-amber-400",
+  };
+  return (
+    <div className="bg-pure/40 border border-bone/20 p-5">
+      <div className="font-mono text-xs text-bone/50 uppercase mb-4">[ Auditoría ]</div>
+      <ul className="space-y-2">
+        {audit.slice(0, 20).map((a) => (
+          <li key={a.id} className="flex items-baseline gap-3 font-mono text-xs border-b border-bone/10 pb-2 last:border-0">
+            <span className={(actionColor[a.action] ?? "text-bone/60") + " uppercase w-24 shrink-0"}>{a.action}</span>
+            <span className="text-bone/40 flex-1 truncate">{a.detail || a.tokenName}</span>
+            <span className="text-bone/30 shrink-0">{new Date(a.createdAt).toLocaleString("es-ES")}</span>
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
 function ManualUsageCard({
   tokenId,
   onSave,
   isPending,
 }: {
   tokenId: string;
-  onSave: (tokens: number, cost: number) => void;
+  onSave: (tokens: number, cost: number, model?: string) => void;
   isPending: boolean;
 }) {
   const [open, setOpen] = React.useState(false);
   const [tokens, setTokens] = React.useState("");
   const [cost, setCost] = React.useState("");
+  const [model, setModel] = React.useState("");
   const [error, setError] = React.useState<string | null>(null);
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -261,9 +504,10 @@ function ManualUsageCard({
       return;
     }
     setError(null);
-    onSave(t, isNaN(c) ? 0 : c);
+    onSave(t, isNaN(c) ? 0 : c, model.trim() || undefined);
     setTokens("");
     setCost("");
+    setModel("");
     setOpen(false);
   };
 
@@ -284,7 +528,7 @@ function ManualUsageCard({
         </button>
       </div>
       {open && (
-        <form onSubmit={handleSubmit} className="grid grid-cols-1 sm:grid-cols-[1fr_1fr_auto] gap-3">
+        <form onSubmit={handleSubmit} className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <div>
             <label className="block font-mono text-xs uppercase text-bone/50 mb-1.5">Tokens</label>
             <input
@@ -306,7 +550,19 @@ function ManualUsageCard({
               className={inputClass}
             />
           </div>
-          <div className="flex items-end">
+          <div className="sm:col-span-2">
+            <label className="block font-mono text-xs uppercase text-bone/50 mb-1.5">
+              Modelo <span className="text-bone/30">(opcional, p. ej. gemini-3.1-pro)</span>
+            </label>
+            <input
+              type="text"
+              value={model}
+              onChange={(e) => setModel(e.target.value)}
+              placeholder="gemini-3-1-pro / gpt-4o / claude-..."
+              className={inputClass}
+            />
+          </div>
+          <div className="sm:col-span-2">
             <button
               type="submit"
               disabled={isPending}
@@ -315,7 +571,7 @@ function ManualUsageCard({
               {isPending ? "[ Guardando ]" : "[ Guardar uso ]"}
             </button>
           </div>
-          {error && <div className="sm:col-span-3 font-mono text-xs text-red-400 mt-1">{error}</div>}
+          {error && <div className="sm:col-span-2 font-mono text-xs text-red-400 mt-1">{error}</div>}
         </form>
       )}
     </div>
@@ -349,6 +605,9 @@ function EditTokenCard({
     baseUrl: token.baseUrl ?? "",
     notes: token.notes ?? "",
     revealSecret: "",
+    tags: (token.tags ?? []).join(", "),
+    agent: token.agent ?? "",
+    maxUsd: typeof token.maxUsd === "number" ? String(token.maxUsd) : "",
   });
 
   const inputClass =
@@ -378,6 +637,9 @@ function EditTokenCard({
         quota: String(token.quota),
         baseUrl: token.baseUrl ?? "",
         notes: token.notes ?? "",
+        tags: (token.tags ?? []).join(", "),
+        agent: token.agent ?? "",
+        maxUsd: typeof token.maxUsd === "number" ? String(token.maxUsd) : "",
       }));
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -406,6 +668,9 @@ function EditTokenCard({
       ...(form.baseUrl.trim() ? { baseUrl: form.baseUrl.trim() } : {}),
       ...(form.notes.trim() ? { notes: form.notes.trim() } : {}),
       ...(form.revealSecret.trim() ? { revealSecret: form.revealSecret } : {}),
+      ...(form.tags.trim() ? { tags: form.tags.split(",").map((t) => t.trim()).filter(Boolean) } : { tags: [] }),
+      ...(form.agent.trim() ? { agent: form.agent.trim() } : { agent: null }),
+      ...(form.maxUsd.trim() ? { maxUsd: parseFloat(form.maxUsd) || null } : { maxUsd: null }),
       ...(hasTotp && code ? { code } : {}),
     });
     setForm((f) => ({ ...f, apiKey: "", publicKey: "", trackingKey: "", revealSecret: "" }));
@@ -554,6 +819,47 @@ function EditTokenCard({
                 value={form.revealSecret}
                 onChange={(e) => setForm({ ...form, revealSecret: e.target.value })}
                 placeholder="Para mostrar la key"
+                className={inputClass}
+              />
+            </div>
+          </div>
+
+                    <div>
+            <label className="block font-mono text-xs uppercase text-bone/50 mb-1.5">
+              [ Tags | separados por coma ]
+            </label>
+            <input
+              type="text"
+              value={form.tags}
+              onChange={(e) => setForm({ ...form, tags: e.target.value })}
+              placeholder="agente, gpt, produccion"
+              className={inputClass}
+            />
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div>
+              <label className="block font-mono text-xs uppercase text-bone/50 mb-1.5">
+                [ Agente ]
+              </label>
+              <input
+                type="text"
+                value={form.agent}
+                onChange={(e) => setForm({ ...form, agent: e.target.value })}
+                placeholder="Dev Agent, ML Pipeline..."
+                className={inputClass}
+              />
+            </div>
+            <div>
+              <label className="block font-mono text-xs uppercase text-bone/50 mb-1.5">
+                [ Max USD / mes | vacío = sin límite ]
+              </label>
+              <input
+                type="number"
+                step="0.01"
+                value={form.maxUsd}
+                onChange={(e) => setForm({ ...form, maxUsd: e.target.value })}
+                placeholder="50.00"
                 className={inputClass}
               />
             </div>

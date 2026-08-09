@@ -23,6 +23,9 @@ function TokenForm() {
     notes: "",
     quota: 0,
     revealSecret: "",
+    tags: "",
+    agent: "",
+    maxUsd: "",
   });
   const [error, setError] = React.useState("");
   const [showHelp, setShowHelp] = React.useState(false);
@@ -64,6 +67,9 @@ function TokenForm() {
         ...(form.trackingKey.trim() ? { trackingKey: form.trackingKey } : {}),
         ...(form.baseUrl.trim() ? { baseUrl: form.baseUrl } : {}),
         ...(form.notes.trim() ? { notes: form.notes } : {}),
+        ...(form.tags.trim() ? { tags: form.tags.split(",").map((t) => t.trim()).filter(Boolean) } : {}),
+        ...(form.agent.trim() ? { agent: form.agent.trim() } : {}),
+        ...(form.maxUsd.trim() ? { maxUsd: parseFloat(form.maxUsd) || undefined } : {}),
       },
       {
         onSuccess: () => navigate({ to: "/" }),
@@ -225,6 +231,56 @@ function TokenForm() {
             rows={2}
             className={inputClass}
           />
+        </div>
+
+        <div>
+          <label className="block font-mono text-xs uppercase text-bone/50 mb-2">
+            [ Tags (opcional) | separados por coma ]
+          </label>
+          <input
+            type="text"
+            value={form.tags}
+            onChange={(e) => setForm({ ...form, tags: e.target.value })}
+            placeholder="agente, gpt, produccion"
+            className={inputClass}
+          />
+          <p className="font-mono text-xs text-bone/40 mt-1.5">
+            {"> etiquetas para buscar y filtrar tokens en el dashboard"}
+          </p>
+        </div>
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <div>
+            <label className="block font-mono text-xs uppercase text-bone/50 mb-2">
+              [ Agente (opcional) ]
+            </label>
+            <input
+              type="text"
+              value={form.agent}
+              onChange={(e) => setForm({ ...form, agent: e.target.value })}
+              placeholder="Dev Agent, ML Pipeline..."
+              className={inputClass}
+            />
+            <p className="font-mono text-xs text-bone/40 mt-1.5">
+              {"> agrupa tus tokens por equipo/agente en el dashboard"}
+            </p>
+          </div>
+          <div>
+            <label className="block font-mono text-xs uppercase text-bone/50 mb-2">
+              [ Max USD / mes (opcional) ]
+            </label>
+            <input
+              type="number"
+              step="0.01"
+              value={form.maxUsd}
+              onChange={(e) => setForm({ ...form, maxUsd: e.target.value })}
+              placeholder="50.00"
+              className={inputClass}
+            />
+            <p className="font-mono text-xs text-bone/40 mt-1.5">
+              {"> gatekeeper: se pausa solo al superar el límite"}
+            </p>
+          </div>
         </div>
 
         <div>

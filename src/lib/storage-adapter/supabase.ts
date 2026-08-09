@@ -2,7 +2,7 @@ import { PrismaClient } from "@prisma/client";
 import { encrypt, decrypt } from "../crypto";
 import { hashRevealSecret, verifyRevealSecret } from "../reveal";
 import { generateTotpSecret, verifyTotp } from "../totp";
-import type { StorageAdapter, Token, UsageSnapshot, TokenWithUsage, CreateTokenInput, UpdateTokenInput, UsageSnapshotInput } from "./index";
+import type { StorageAdapter, Token, UsageSnapshot, TokenWithUsage, CreateTokenInput, UpdateTokenInput, UsageSnapshotInput, TokenAudit, RevealResult } from "./index";
 
 const prisma = new PrismaClient();
 
@@ -61,6 +61,21 @@ async function mapToken(db: any): Promise<Token> {
     trackingKeyMasked: db.trackingKey ? maskKey(decrypt(db.trackingKey)) : null,
     baseUrl: db.baseUrl ?? null,
     notes: db.notes ?? null,
+    active: db.active ?? true,
+    maxUsd: db.maxUsd ?? null,
+    tags: db.tags ?? [],
+    agent: db.agent ?? null,
+  };
+}
+
+function mapAudit(db: any): TokenAudit {
+  return {
+    id: db.id,
+    tokenId: db.tokenId ?? null,
+    tokenName: db.tokenName ?? null,
+    action: db.action,
+    detail: db.detail ?? null,
+    createdAt: db.createdAt.toISOString(),
   };
 }
 
@@ -118,9 +133,15 @@ export const supabaseAdapter: StorageAdapter = {
         trackingKey: input.trackingKey ? encrypt(input.trackingKey) : null,
         baseUrl: input.baseUrl ?? null,
         notes: input.notes ?? null,
+        maxUsd: input.maxUsd ?? null,
+        tags: input.tags ?? [],
+        agent: input.agent ?? null,
         providerId: provider.id,
       },
       include: { provider: true },
+    });
+    await prisma.tokenAudit.create({
+      data: { tokenName: input.name, action: "create", detail: "// Token creado" },
     });
     return mapToken(row);
   },
@@ -137,6 +158,10 @@ export const supabaseAdapter: StorageAdapter = {
     if (input.trackingKey !== undefined) data.trackingKey = input.trackingKey ? encrypt(input.trackingKey) : null;
     if (input.baseUrl !== undefined) data.baseUrl = input.baseUrl ?? null;
     if (input.notes !== undefined) data.notes = input.notes ?? null;
+    if (input.active !== undefined) data.active = input.active;
+    if (input.maxUsd !== undefined) data.maxUsd = input.maxUsd ?? null;
+    if (input.tags !== undefined) data.tags = input.tags;
+    if (input.agent !== undefined) data.agent = input.agent ?? null;
     if (input.provider !== undefined) {
       const provider = await prisma.provider.upsert({
         where: { name: input.provider },
@@ -195,7 +220,7 @@ export const supabaseAdapter: StorageAdapter = {
     }
     const gate = await requireGlobalCode(code);
     if (!gate.ok) return { ok: false, error: gate.error };
-    return {
+    const revealed: RevealResult = {
       ok: true,
       key: decrypt(row.encryptedValue),
       publicKey: row.publicKey ? decrypt(row.publicKey) : null,
@@ -203,6 +228,10 @@ export const supabaseAdapter: StorageAdapter = {
       baseUrl: row.baseUrl ?? null,
       notes: row.notes ?? null,
     };
+    await prisma.tokenAudit.create({
+      data: { tokenId: row.id, tokenName: row.name, action: "reveal", detail: "// API key revelada" },
+    });
+    return revealed;
   },
 
   getTotpStatus: () => getGlobalTotpStatus(),
@@ -234,5 +263,30 @@ export const supabaseAdapter: StorageAdapter = {
     const secret = await getGlobalTotpSecret();
     if (!secret) return false;
     return verifyTotp(secret, code);
+  },
+
+  setTokenActive: async (id: string, active: boolean) => {
+    const row = await prisma.token.update({
+      where: { id },
+      data: { active },
+      include: { provider: true },
+    });
+    await prisma.tokenAudit.create({
+      data: { tokenId: row.id, tokenName: row.name, action: active ? "activate" : "pause", detail: active ? "// Token activado" : "// Token pausado" },
+    });
+    return mapToken(row);
+  },
+
+  getAuditLog: async (tokenId?: string) => {
+    const rows = await prisma.tokenAudit.findMany({
+      where: tokenId ? { OR: [{ tokenId }, { tokenId: null }] } : undefined,
+      orderBy: { createdAt: "desc" },
+      take: 100,
+    });
+    return rows.map(mapAudit);
+  },
+
+  addAudit: async (entry) => {
+    await prisma.tokenAudit.create({ data: entry as any });
   },
 };

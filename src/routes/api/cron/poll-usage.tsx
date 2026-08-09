@@ -28,6 +28,11 @@ export const Route = createFileRoute("/api/cron/poll-usage")({
             continue;
           }
 
+          if (!token.active) {
+            results.push({ tokenId: token.id, provider: token.provider, success: false, error: "Token paused" });
+            continue;
+          }
+
           try {
             const usage = await providerAdapter.fetchUsage({
               apiKey: decrypt(token.encryptedValue),
@@ -36,23 +41,63 @@ export const Route = createFileRoute("/api/cron/poll-usage")({
               baseUrl: token.baseUrl ?? null,
             });
             if (usage.tokensUsed > 0 || usage.cost > 0 || (usage.daily && usage.daily.length > 0)) {
-              // Providers may return per-day detail; store one snapshot per day.
-              const days = usage.daily?.length
-                ? usage.daily
-                : [{ timestamp: new Date().toISOString(), tokensUsed: usage.tokensUsed, cost: usage.cost, model: null }];
-              const details = usage.models?.length ? usage.models : [{ model: null, tokensUsed: usage.tokensUsed, cost: usage.cost }];
-              for (const d of days) {
+              if (usage.models && usage.models.length > 0) {
+                // Providers may expose per-model breakdown; store one snapshot per model.
+                for (const m of usage.models) {
+                  await adapter.addSnapshot(token.id, {
+                    tokensUsed: m.tokensUsed,
+                    cost: m.cost,
+                    model: m.model ?? null,
+                    inputTokens: m.inputTokens ?? 0,
+                    outputTokens: m.outputTokens ?? 0,
+                    latencyMs: m.latencyMs ?? null,
+                    tokensPerSecond: m.tokensPerSecond ?? null,
+                    provider: token.provider,
+                    timestamp: new Date().toISOString(),
+                  });
+                }
+              } else if (usage.daily && usage.daily.length > 0) {
+                // Providers may return per-day detail; store one snapshot per day.
+                for (const d of usage.daily) {
+                  await adapter.addSnapshot(token.id, {
+                    tokensUsed: d.tokensUsed,
+                    cost: d.cost,
+                    model: d.model ?? null,
+                    inputTokens: 0,
+                    outputTokens: 0,
+                    latencyMs: null,
+                    tokensPerSecond: null,
+                    provider: token.provider,
+                    timestamp: d.timestamp,
+                  });
+                }
+              } else {
+                // Fallback: a single snapshot covering the reported window.
                 await adapter.addSnapshot(token.id, {
-                  tokensUsed: d.tokensUsed,
-                  cost: d.cost,
-                  model: d.model ?? null,
+                  tokensUsed: usage.tokensUsed,
+                  cost: usage.cost,
+                  model: null,
                   inputTokens: 0,
                   outputTokens: 0,
                   latencyMs: null,
                   tokensPerSecond: null,
                   provider: token.provider,
-                  timestamp: d.timestamp,
                 });
+              }
+
+              // Gatekeeper: auto-pause a token that blew its monthly cap.
+              if (typeof token.maxUsd === "number" && token.maxUsd > 0 && token.totalCost + usage.cost > token.maxUsd) {
+                try {
+                  await adapter.setTokenActive(token.id, false);
+                  await adapter.addAudit({
+                    tokenId: token.id,
+                    tokenName: token.name,
+                    action: "cap_exceeded",
+                    detail: `// Cap $${token.maxUsd.toFixed(2)} superado`,
+                  });
+                } catch (e: any) {
+                  results.push({ tokenId: token.id, provider: token.provider, success: false, error: `Cap check: ${e.message}` });
+                }
               }
               results.push({ tokenId: token.id, provider: token.provider, success: true });
             } else {

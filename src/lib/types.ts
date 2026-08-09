@@ -26,6 +26,19 @@ export interface Token {
   trackingKey?: string;
   baseUrl?: string | null;
   notes?: string | null;
+  active: boolean;
+  maxUsd?: number | null;
+  tags: string[];
+  agent?: string | null;
+}
+
+export interface TokenAudit {
+  id: string;
+  tokenId?: string | null;
+  tokenName?: string | null;
+  action: string;
+  detail?: string | null;
+  createdAt: string;
 }
 
 export interface UsageSnapshot {
@@ -57,6 +70,9 @@ export type CreateTokenInput = {
   trackingKey?: string;
   baseUrl?: string;
   notes?: string;
+  maxUsd?: number;
+  tags?: string[];
+  agent?: string;
 };
 
 export type UpdateTokenInput = {
@@ -70,4 +86,8 @@ export type UpdateTokenInput = {
   trackingKey?: string;
   baseUrl?: string;
   notes?: string;
+  active?: boolean;
+  maxUsd?: number | null;
+  tags?: string[];
+  agent?: string | null;
 };

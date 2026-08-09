@@ -1,10 +1,34 @@
-import type { StorageAdapter, Token, UsageSnapshot, TokenWithUsage, CreateTokenInput, UpdateTokenInput, UsageSnapshotInput } from "./index";
+import type { StorageAdapter, Token, UsageSnapshot, TokenWithUsage, CreateTokenInput, UpdateTokenInput, UsageSnapshotInput, TokenAudit, RevealResult } from "./index";
 import { hashRevealSecret, verifyRevealSecret } from "../reveal";
 import { generateTotpSecret, verifyTotp } from "../totp";
 
 const TOKENS_KEY = "ath_tokens";
 const SNAPSHOTS_KEY = "ath_snapshots";
 const TOTP_KEY = "ath_totp_global";
+const AUDIT_KEY = "ath_audit";
+
+function getAuditLocal(): TokenAudit[] {
+  if (typeof window === "undefined") return [];
+  try {
+    return JSON.parse(localStorage.getItem(AUDIT_KEY) || "[]");
+  } catch {
+    return [];
+  }
+}
+
+async function addAuditLocal(entry: { tokenId?: string | null; tokenName?: string | null; action: string; detail?: string | null }): Promise<void> {
+  if (typeof window === "undefined") return;
+  const list = getAuditLocal();
+  list.unshift({
+    id: "aud_" + crypto.randomUUID().slice(0, 8),
+    tokenId: entry.tokenId ?? null,
+    tokenName: entry.tokenName ?? null,
+    action: entry.action,
+    detail: entry.detail ?? null,
+    createdAt: new Date().toISOString(),
+  });
+  localStorage.setItem(AUDIT_KEY, JSON.stringify(list.slice(0, 200)));
+}
 
 function getGlobalTotpSecret(): string | null {
   if (typeof window === "undefined") return null;
@@ -45,8 +69,12 @@ const SEED_TOKENS: Token[] = [
     quota: 10000,
     totalCost: 247.83,
     createdAt: "2026-01-15T10:30:00.000Z",
-    hasRevealSecret: false,
+hasRevealSecret: false,
     hasTotp: false,
+    active: true,
+    maxUsd: 100,
+    tags: ["agente", "gpt"],
+    agent: "Dev Agent",
   },
   {
     id: "tok_002",
@@ -59,6 +87,10 @@ const SEED_TOKENS: Token[] = [
     createdAt: "2026-02-03T14:20:00.000Z",
     hasRevealSecret: false,
     hasTotp: false,
+    active: true,
+    maxUsd: 50,
+    tags: ["claude"],
+    agent: "Dev Agent",
   },
   {
     id: "tok_003",
@@ -71,6 +103,10 @@ const SEED_TOKENS: Token[] = [
     createdAt: "2026-03-01T08:15:00.000Z",
     hasRevealSecret: false,
     hasTotp: false,
+    active: true,
+    maxUsd: null,
+    tags: ["embeddings"],
+    agent: "ML Pipeline",
   },
 ];
 
@@ -150,6 +186,10 @@ export const localAdapter: StorageAdapter = {
       createdAt: new Date().toISOString(),
       hasRevealSecret: !!input.revealSecret,
       hasTotp: false,
+      active: true,
+      maxUsd: input.maxUsd ?? null,
+      tags: input.tags ?? [],
+      agent: input.agent ?? null,
       ...(input.revealSecret ? { revealSecretHash: await hashRevealSecret(input.revealSecret) } : {}),
       hasPublicKey: !!input.publicKey,
       hasTrackingKey: !!input.trackingKey,
@@ -162,6 +202,7 @@ export const localAdapter: StorageAdapter = {
     };
     tokens.push(newToken);
     localStorage.setItem(TOKENS_KEY, JSON.stringify(tokens));
+    await addAuditLocal({ tokenId: newToken.id, tokenName: newToken.name, action: "create", detail: "// Token creado" });
     return newToken;
   },
 
@@ -194,7 +235,12 @@ export const localAdapter: StorageAdapter = {
     }
     if (input.baseUrl !== undefined) tokens[idx].baseUrl = input.baseUrl ?? null;
     if (input.notes !== undefined) tokens[idx].notes = input.notes ?? null;
+    if (input.active !== undefined) tokens[idx].active = input.active;
+    if (input.maxUsd !== undefined) tokens[idx].maxUsd = input.maxUsd ?? null;
+    if (input.tags !== undefined) tokens[idx].tags = input.tags;
+    if (input.agent !== undefined) tokens[idx].agent = input.agent ?? null;
     localStorage.setItem(TOKENS_KEY, JSON.stringify(tokens));
+    await addAuditLocal({ tokenId: tokens[idx].id, tokenName: tokens[idx].name, action: "update", detail: "// Token actualizado" });
     return tokens[idx];
   },
 
@@ -247,7 +293,7 @@ export const localAdapter: StorageAdapter = {
     }
     const gate = await requireGlobalCode(code);
     if (!gate.ok) return { ok: false, error: gate.error };
-    return {
+    const revealed: RevealResult = {
       ok: true,
       key: token.encryptedValue.replace(/^enc_/, ""),
       publicKey: token.publicKey ? token.publicKey.replace(/^enc_/, "") : null,
@@ -255,6 +301,8 @@ export const localAdapter: StorageAdapter = {
       baseUrl: token.baseUrl ?? null,
       notes: token.notes ?? null,
     };
+    await addAuditLocal({ tokenId: token.id, tokenName: token.name, action: "reveal", detail: "// API key revelada" });
+    return revealed;
   },
 
   getTotpStatus: () => getGlobalTotpStatus(),
@@ -279,5 +327,26 @@ export const localAdapter: StorageAdapter = {
     const secret = getGlobalTotpSecret();
     if (!secret) return false;
     return verifyTotp(secret, code);
+  },
+
+  setTokenActive: async (id: string, active: boolean) => {
+    const tokens: Token[] = JSON.parse(localStorage.getItem(TOKENS_KEY) || "[]");
+    const idx = tokens.findIndex((t) => t.id === id);
+    if (idx === -1) throw new Error("Token not found");
+    tokens[idx].active = active;
+    localStorage.setItem(TOKENS_KEY, JSON.stringify(tokens));
+    await addAuditLocal({ tokenId: tokens[idx].id, tokenName: tokens[idx].name, action: active ? "activate" : "pause", detail: active ? "// Token activado" : "// Token pausado" });
+    return tokens[idx];
+  },
+
+  getAuditLog: async (tokenId?: string) => {
+    const list = tokenId
+      ? getAuditLocal().filter((a) => a.tokenId === tokenId || !a.tokenId)
+      : getAuditLocal();
+    return list;
+  },
+
+  addAudit: async (entry) => {
+    await addAuditLocal(entry);
   },
 };

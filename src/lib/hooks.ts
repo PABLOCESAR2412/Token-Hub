@@ -4,6 +4,7 @@ import type { RevealResult, TotpSetupResult } from "./storage-adapter";
 import type {
   CreateTokenInput,
   Token,
+  TokenAudit,
   TokenWithUsage,
   UpdateTokenInput,
   UsageSnapshot,
@@ -75,6 +76,7 @@ export function useUpdateToken() {
       qc.invalidateQueries({ queryKey: ["tokens"] });
       qc.invalidateQueries({ queryKey: ["token", vars.id] });
       qc.invalidateQueries({ queryKey: ["totp-status"] });
+      qc.invalidateQueries({ queryKey: ["audit"] });
     },
   });
 }
@@ -90,7 +92,10 @@ export function useDeleteToken() {
       const fns = await getServerFns();
       return (await fns.deleteToken({ data: id })) as void;
     },
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["tokens"] }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["tokens"] });
+      qc.invalidateQueries({ queryKey: ["audit"] });
+    },
   });
 }
 
@@ -111,6 +116,7 @@ export function useSnapshots(tokenId: string | undefined) {
 }
 
 export function useRevealToken() {
+  const qc = useQueryClient();
   return useMutation({
     mutationFn: async (input: { tokenId: string; revealSecret: string; code?: string }): Promise<RevealResult> => {
       if (isDemo) {
@@ -119,6 +125,9 @@ export function useRevealToken() {
       }
       const fns = await getServerFns();
       return (await fns.revealToken({ data: input })) as RevealResult;
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["audit"] });
     },
   });
 }
@@ -204,13 +213,13 @@ export function useVerifyTotpCode() {
 export function useAddSnapshot() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async (input: { tokenId: string; tokensUsed: number; cost: number }): Promise<UsageSnapshot> => {
+    mutationFn: async (input: { tokenId: string; tokensUsed: number; cost: number; model?: string }): Promise<UsageSnapshot> => {
       if (isDemo) {
         const adapter = await loadAdapter();
         return await adapter.addSnapshot(input.tokenId, {
           tokensUsed: input.tokensUsed,
           cost: input.cost,
-          model: null,
+          model: input.model ?? null,
         });
       }
       const fns = await getServerFns();
@@ -219,6 +228,38 @@ export function useAddSnapshot() {
     onSuccess: (_data, vars) => {
       qc.invalidateQueries({ queryKey: ["token", vars.tokenId] });
       qc.invalidateQueries({ queryKey: ["tokens"] });
+    },
+  });
+}
+
+export function useSetTokenActive() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (input: { id: string; active: boolean }): Promise<Token> => {
+      if (isDemo) {
+        const adapter = await loadAdapter();
+        return await adapter.setTokenActive(input.id, input.active);
+      }
+      const fns = await getServerFns();
+      return (await fns.setTokenActive({ data: input })) as Token;
+    },
+    onSuccess: (_data, vars) => {
+      qc.invalidateQueries({ queryKey: ["tokens"] });
+      qc.invalidateQueries({ queryKey: ["token", vars.id] });
+    },
+  });
+}
+
+export function useAuditLog(tokenId?: string) {
+  return useQuery({
+    queryKey: ["audit", tokenId ?? "all"],
+    queryFn: async (): Promise<TokenAudit[]> => {
+      if (isDemo) {
+        const adapter = await loadAdapter();
+        return await adapter.getAuditLog(tokenId);
+      }
+      const fns = await getServerFns();
+      return (await fns.getAuditLog({ data: tokenId })) as TokenAudit[];
     },
   });
 }

@@ -25,7 +25,10 @@ model Token {
   quota            Int       @default(0) // 0 means unlimited
   totalCost        Float     @default(0.0)
   revealSecretHash String? // Optional scrypt hash for showing the raw key
-  totpSecret       String? // Optional base32 TOTP secret; reveal requires a 6-digit code
+  active           Boolean   @default(true) // Gatekeeper: paused tokens are skipped by the cron
+  maxUsd           Float? // Gatekeeper: monthly spend cap; auto-pauses the token when exceeded
+  tags             String[]  @default([]) // Searchable/filterable labels
+  agent            String? // Which agent/team the token belongs to (per-agent dashboard)
   resetAt          DateTime? // Next quota reset date when the provider exposes it
   createdAt        DateTime  @default(now())
   updatedAt        DateTime  @updatedAt
@@ -40,6 +43,18 @@ model Token {
   provider   Provider @relation(fields: [providerId], references: [id])
 
   snapshots UsageSnapshot[]
+  audits    TokenAudit[]
+}
+
+model TokenAudit {
+  id        String   @id @default(uuid())
+  tokenId   String?
+  tokenName String? // Denormalized so deleted tokens keep their history
+  action    String // e.g. "reveal", "create", "update", "pause", "cap_exceeded"
+  detail    String?
+  createdAt DateTime @default(now())
+
+  token Token? @relation(fields: [tokenId], references: [id])
 }
 
 model UsageSnapshot {

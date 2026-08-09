@@ -10,6 +10,7 @@ import { Logo } from "../components/Logo";
 import { LoginScreen } from "../components/LoginScreen";
 import { ChangePasswordScreen } from "../components/ChangePasswordScreen";
 import { useSession } from "../lib/use-session";
+import { ChangePasswordDialog } from "../components/ChangePasswordDialog";
 import "../global.css";
 
 const isProduction = process.env.APP_MODE === "production";
@@ -82,7 +83,7 @@ function AppLayout() {
           <span className="border border-bone/20 px-2 py-1 text-bone/60">
             MODE: <span className="text-electric">{process.env.APP_MODE || "demo"}</span>
           </span>
-          {isProd && <LogoutButton />}
+          {isProd && <HeaderActions />}
         </div>
       </header>
       <main className="flex-1 w-full max-w-[1440px] mx-auto px-6 lg:px-8 py-8 lg:py-12 min-w-0">
@@ -162,6 +163,24 @@ function AuthLayout({ children }: { children: React.ReactNode }) {
   }, [logout]);
 
   return <>{children}</>;
+}
+
+function HeaderActions() {
+  const { logout, authed, mustChangePassword } = useSession();
+  const [showPassword, setShowPassword] = React.useState(false);
+  if (!authed || mustChangePassword) return <LogoutButton />;
+  return (
+    <>
+      <button
+        onClick={() => setShowPassword((s) => !s)}
+        className="border border-bone/20 px-2 py-1 text-bone/60 hover:text-electric hover:border-electric/40 transition-colors"
+      >
+        CAMBIAR PASS
+      </button>
+      {showPassword && <ChangePasswordDialog onClose={() => setShowPassword(false)} />}
+      <LogoutButton />
+    </>
+  );
 }
 
 function LogoutButton() {

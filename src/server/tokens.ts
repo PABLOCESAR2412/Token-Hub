@@ -13,6 +13,22 @@ export const getTokens = createServerFn({ method: "GET" })
     return await adapter.getTokens();
   });
 
+export const setTokenActive = createServerFn({ method: "POST" })
+  .validator((input: { id: string; active: boolean }) => input)
+  .handler(async ({ data }) => {
+    if (!isAuthorized(getRequest())) return unauthorizedResponse();
+    const adapter = await loadAdapter();
+    return await adapter.setTokenActive(data.id, data.active);
+  });
+
+export const getAuditLog = createServerFn({ method: "GET" })
+  .validator((tokenId?: string) => tokenId)
+  .handler(async ({ data }) => {
+    if (!isAuthorized(getRequest())) return unauthorizedResponse();
+    const adapter = await loadAdapter();
+    return await adapter.getAuditLog(data);
+  });
+
 export const getToken = createServerFn({ method: "GET" })
   .validator((id: string) => id)
   .handler(async ({ data }) => {
@@ -104,7 +120,7 @@ export const verifyTotpCode = createServerFn({ method: "POST" })
 
 export const addSnapshot = createServerFn({ method: "POST" })
   .validator(
-    (input: { tokenId: string; tokensUsed: number; cost: number }) => input
+    (input: { tokenId: string; tokensUsed: number; cost: number; model?: string; inputTokens?: number; outputTokens?: number }) => input
   )
   .handler(async ({ data }) => {
     if (!isAuthorized(getRequest())) return unauthorizedResponse();
@@ -112,6 +128,8 @@ export const addSnapshot = createServerFn({ method: "POST" })
     return await adapter.addSnapshot(data.tokenId, {
       tokensUsed: data.tokensUsed,
       cost: data.cost,
-      model: null,
+      model: data.model ?? null,
+      inputTokens: data.inputTokens ?? 0,
+      outputTokens: data.outputTokens ?? 0,
     });
   });

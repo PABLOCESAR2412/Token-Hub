@@ -1,6 +1,6 @@
-import type { Token, UsageSnapshot, TokenWithUsage, CreateTokenInput, UpdateTokenInput } from "../types";
+import type { Token, UsageSnapshot, TokenWithUsage, CreateTokenInput, UpdateTokenInput, TokenAudit } from "../types";
 
-export type { Token, UsageSnapshot, TokenWithUsage, CreateTokenInput, UpdateTokenInput } from "../types";
+export type { Token, UsageSnapshot, TokenWithUsage, CreateTokenInput, UpdateTokenInput, TokenAudit } from "../types";
 
 export interface UsageSnapshotInput {
   tokensUsed: number;
@@ -44,6 +44,9 @@ export interface StorageAdapter {
   enableTotp: (secret: string, code: string) => Promise<RevealResult>;
   disableTotp: () => Promise<RevealResult>;
   verifyTotpCode: (code: string) => Promise<boolean>;
+  setTokenActive: (id: string, active: boolean) => Promise<Token>;
+  getAuditLog: (tokenId?: string) => Promise<TokenAudit[]>;
+  addAudit: (entry: { tokenId?: string | null; tokenName?: string | null; action: string; detail?: string | null }) => Promise<void>;
 }
 
 async function loadAdapter(): Promise<StorageAdapter> {
