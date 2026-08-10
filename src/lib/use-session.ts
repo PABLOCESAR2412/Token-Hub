@@ -27,6 +27,16 @@ function getSnapshot(): SessionState {
   return state;
 }
 
+/** Imperative logout used from hooks/server-fn error paths (not a React hook). */
+export async function forceLogout(): Promise<void> {
+  try {
+    await fetch("/api/auth/logout", { method: "POST" }).catch(() => {});
+  } catch {
+    // ignore network errors; still drop the local session state below
+  }
+  setState({ authed: false, mustChangePassword: false, recovery: false });
+}
+
 async function checkSession(): Promise<SessionState> {
   try {
     const res = await fetch("/api/auth/session");
