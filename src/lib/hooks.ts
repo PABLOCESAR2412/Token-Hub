@@ -18,12 +18,18 @@ async function getServerFns() {
 }
 
 // The server side guards each fn with isAuthorized() and returns a 401
-// Response on session expiry. TanStack resolves that as a plain object
-// ({error:"Unauthorized"}) instead of throwing, so we detect it here and
-// force a client-side logout so the UI falls back to the login screen
-// instead of crashing on a non-array "data".
+// Response on session expiry. Depending on the transport that can surface
+// either as a plain object ({error:"Unauthorized"}) or as a raw Response.
+// We detect both here and force a client-side logout so the UI falls back
+// to the login screen instead of crashing on a non-array "data".
 async function callServer<T>(fn: () => Promise<T>): Promise<T> {
   const res = await fn();
+
+  if (res instanceof Response) {
+    void forceLogout();
+    throw new Error("// Sesión expirada");
+  }
+
   if (res && typeof res === "object" && !Array.isArray(res) && "error" in (res as any)) {
     const obj = res as any;
     // Reveal/enable/disable return { ok, error? } on legitimate failures.
