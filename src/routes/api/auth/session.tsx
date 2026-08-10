@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { getCookie } from "@tanstack/react-start/server";
-import { verifySessionToken, sessionKind, COOKIE_NAME } from "../../../lib/auth";
+import { verifySessionToken, sessionKind, sessionExpiry, COOKIE_NAME } from "../../../lib/auth";
 import { getAuthState } from "../../../lib/credentials";
 
 export const Route = createFileRoute("/api/auth/session")({
@@ -15,7 +15,12 @@ export const Route = createFileRoute("/api/auth/session")({
         const recovery = sessionKind(token) === "recovery";
         // After a successful recovery the owner MUST set a new password.
         const needsChange = mustChangePassword || recovery;
-        return Response.json({ authed: true, mustChangePassword: needsChange, recovery });
+        return Response.json({
+          authed: true,
+          mustChangePassword: needsChange,
+          recovery,
+          expiresAt: sessionExpiry(token),
+        });
       },
     },
   },

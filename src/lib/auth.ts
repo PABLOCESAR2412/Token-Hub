@@ -39,7 +39,7 @@ export function sessionKind(token: string | undefined): SessionKind | null {
   return parsed ? parsed.kind : null;
 }
 
-function parseSessionToken(token: string | undefined): { kind: SessionKind } | null {
+function parseSessionToken(token: string | undefined): { kind: SessionKind; expires: number } | null {
   if (!token) return null;
   const [payload, sig] = token.split(".");
   if (!payload || !sig) return null;
@@ -52,7 +52,13 @@ function parseSessionToken(token: string | undefined): { kind: SessionKind } | n
   const a = Buffer.from(sig);
   const b = Buffer.from(expected);
   if (a.length !== b.length) return null;
-  return timingSafeEqual(a, b) ? { kind } : null;
+  return timingSafeEqual(a, b) ? { kind, expires } : null;
+}
+
+/** Returns the unix-seconds expiry for a valid token, or null when invalid. */
+export function sessionExpiry(token: string | undefined): number | null {
+  const parsed = parseSessionToken(token);
+  return parsed ? parsed.expires : null;
 }
 
 export function isAuthorized(request: globalThis.Request): boolean {

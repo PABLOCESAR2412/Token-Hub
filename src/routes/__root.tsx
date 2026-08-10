@@ -148,21 +148,18 @@ function AuthGate() {
 }
 
 function AuthLayout({ children }: { children: React.ReactNode }) {
-  // Re-check periodically so an expired session triggers the login screen.
-  const { authed, logout } = useSession();
-  React.useEffect(() => {
-    const id = setInterval(() => {
-      fetch("/api/auth/session")
-        .then((r) => r.json())
-        .then((j) => {
-          if (!j.authed) logout();
-        })
-        .catch(() => {});
-    }, 60_000);
-    return () => clearInterval(id);
-  }, [logout]);
-
-  return <>{children}</>;
+  const { expiringSoon } = useSession();
+  return (
+    <>
+      {expiringSoon && (
+        <div className="border-b border-amber-400/30 bg-amber-400/10 px-6 lg:px-8 py-2.5 flex items-center justify-center gap-2 font-mono text-xs text-amber-300">
+          <span className="w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse shrink-0" />
+          La sesión expirará pronto (menos de 24h). Se cerrará automáticamente al vencer.
+        </div>
+      )}
+      {children}
+    </>
+  );
 }
 
 function HeaderActions() {

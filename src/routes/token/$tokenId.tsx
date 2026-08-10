@@ -35,12 +35,13 @@ function TokenDetail() {
   const addSnapshot = useAddSnapshot();
   const updateToken = useUpdateToken();
   const setActive = useSetTokenActive();
-  const { data: audit = [] } = useAuditLog(tokenId);
+  const { data: auditData = [] } = useAuditLog(tokenId);
+  const audit = Array.isArray(auditData) ? auditData : [];
   const router = useRouter();
   const { dialog, open, close } = useConfirmDialog();
   const [isDeleting, setIsDeleting] = React.useState(false);
 
-  const snapshots = token?.snapshots || [];
+  const snapshots = Array.isArray(token?.snapshots) ? token.snapshots : [];
 
   const daily = React.useMemo(() => {
     const map = new Map<string, { tokensUsed: number; cost: number }>();

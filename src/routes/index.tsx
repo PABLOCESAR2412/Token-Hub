@@ -19,7 +19,8 @@ export const Route = createFileRoute("/")({
 });
 
 function Dashboard() {
-  const { data: tokens = [], isLoading } = useTokens();
+  const { data, isLoading } = useTokens();
+  const tokens: Token[] = Array.isArray(data) ? data : [];
   const deleteToken = useDeleteToken();
   const setActive = useSetTokenActive();
   const [sorting, setSorting] = React.useState<SortingState>([]);

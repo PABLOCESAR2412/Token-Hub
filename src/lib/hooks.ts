@@ -52,6 +52,7 @@ export function useTokens() {
       const fns = await getServerFns();
       return await callServer(() => fns.getTokens()) as Token[];
     },
+    retry: false,
   });
 }
 
@@ -68,6 +69,7 @@ export function useToken(id: string | undefined) {
       return (await callServer(() => fns.getToken({ data: id }))) as TokenWithUsage | null;
     },
     enabled: !!id,
+    retry: false,
   });
 }
 
@@ -137,6 +139,7 @@ export function useSnapshots(tokenId: string | undefined) {
       return (await callServer(() => fns.getSnapshots({ data: tokenId }))) as UsageSnapshot[];
     },
     enabled: !!tokenId,
+    retry: false,
   });
 }
 
@@ -168,6 +171,7 @@ export function useTotpStatus() {
       const fns = await getServerFns();
       return (await callServer(() => fns.getTotpStatus())) as { enabled: boolean };
     },
+    retry: false,
   });
 }
 
@@ -286,5 +290,6 @@ export function useAuditLog(tokenId?: string) {
       const fns = await getServerFns();
       return (await callServer(() => fns.getAuditLog({ data: tokenId }))) as TokenAudit[];
     },
+    retry: false,
   });
 }

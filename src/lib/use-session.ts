@@ -4,11 +4,14 @@ interface SessionState {
   authed: boolean | null;
   mustChangePassword: boolean;
   recovery: boolean;
+  expiresAt: number | null;
 }
+
+const SESSION_WARN_MS = 60 * 60 * 24 * 1000; // warn when under 1 day left
 
 // Module-level store so every component that calls useSession() observes
 // the same state (LoginScreen / AuthGate / LogoutButton share it).
-let state: SessionState = { authed: null, mustChangePassword: false, recovery: false };
+let state: SessionState = { authed: null, mustChangePassword: false, recovery: false, expiresAt: null };
 const listeners = new Set<() => void>();
 
 function setState(next: SessionState) {
@@ -34,25 +37,30 @@ export async function forceLogout(): Promise<void> {
   } catch {
     // ignore network errors; still drop the local session state below
   }
-  setState({ authed: false, mustChangePassword: false, recovery: false });
+  setState({ authed: false, mustChangePassword: false, recovery: false, expiresAt: null });
 }
+
+const UNAUTHED: SessionState = { authed: false, mustChangePassword: false, recovery: false, expiresAt: null };
 
 async function checkSession(): Promise<SessionState> {
   try {
     const res = await fetch("/api/auth/session");
-    if (!res.ok) return { authed: false, mustChangePassword: false, recovery: false };
+    if (!res.ok) return UNAUTHED;
     const json = (await res.json()) as {
       authed?: boolean;
       mustChangePassword?: boolean;
       recovery?: boolean;
+      expiresAt?: number | null;
     };
+    if (json.authed !== true) return UNAUTHED;
     return {
-      authed: json.authed === true,
+      authed: true,
       mustChangePassword: json.mustChangePassword === true,
       recovery: json.recovery === true,
+      expiresAt: typeof json.expiresAt === "number" ? json.expiresAt : null,
     };
   } catch {
-    return { authed: false, mustChangePassword: false, recovery: false };
+    return UNAUTHED;
   }
 }
 
@@ -74,10 +82,16 @@ export function useSession() {
       error?: string;
       ok?: boolean;
       mustChangePassword?: boolean;
+      expiresAt?: number | null;
       hint?: string;
     };
     if (!res.ok) return json.error || "Error";
-    setState({ authed: true, mustChangePassword: json.mustChangePassword === true, recovery: false });
+    setState({
+      authed: true,
+      mustChangePassword: json.mustChangePassword === true,
+      recovery: false,
+      expiresAt: typeof json.expiresAt === "number" ? json.expiresAt : null,
+    });
     return null;
   }, []);
 
@@ -89,7 +103,7 @@ export function useSession() {
     });
     const json = (await res.json().catch(() => ({}))) as { error?: string; ok?: boolean };
     if (!res.ok) return json.error || "Error";
-    setState({ authed: true, mustChangePassword: true, recovery: true });
+    setState({ authed: true, mustChangePassword: true, recovery: true, expiresAt: null });
     return null;
   }, []);
 
@@ -105,7 +119,7 @@ export function useSession() {
       });
       const json = (await res.json().catch(() => ({}))) as { error?: string };
       if (!res.ok) return json.error || "Error";
-      setState({ authed: true, mustChangePassword: false, recovery: false });
+      setState({ authed: true, mustChangePassword: false, recovery: false, expiresAt: null });
       return null;
     },
     [state.recovery]
@@ -113,7 +127,7 @@ export function useSession() {
 
   const logout = useCallback(async () => {
     await fetch("/api/auth/logout", { method: "POST" });
-    setState({ authed: false, mustChangePassword: false, recovery: false });
+    setState({ authed: false, mustChangePassword: false, recovery: false, expiresAt: null });
   }, []);
 
   // Re-check periodically so an expired session triggers the login screen.
@@ -121,15 +135,22 @@ export function useSession() {
     if (!session.authed) return;
     const id = setInterval(async () => {
       const s = await checkSession();
-      if (!s.authed) setState({ authed: false, mustChangePassword: false, recovery: false });
+      if (!s.authed) setState({ authed: false, mustChangePassword: false, recovery: false, expiresAt: null });
     }, 60_000);
     return () => clearInterval(id);
   }, [session.authed]);
+
+  const expiringSoon =
+    session.authed === true &&
+    !session.mustChangePassword &&
+    typeof session.expiresAt === "number" &&
+    session.expiresAt * 1000 - Date.now() < SESSION_WARN_MS;
 
   return {
     authed: session.authed,
     mustChangePassword: session.mustChangePassword,
     recovery: session.recovery,
+    expiringSoon,
     login,
     recover,
     logout,

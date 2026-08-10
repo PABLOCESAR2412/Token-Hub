@@ -31,6 +31,7 @@ export const Route = createFileRoute("/api/auth/login")({
         return Response.json({
           ok: true,
           mustChangePassword,
+          expiresAt: Math.floor(Date.now() / 1000) + 60 * 60 * 24 * 7,
           hint: mustChangePassword ? `Usa la contraseña por defecto: ${DEFAULT_PASSWORD}` : undefined,
         });
       },
