@@ -160,6 +160,7 @@ function TokenForm() {
             type="password"
             value={form.apiKey}
             onChange={(e) => setForm({ ...form, apiKey: e.target.value })}
+            autoComplete="new-password"
             placeholder="sk-..."
             className={inputClass}
           />
@@ -179,6 +180,7 @@ function TokenForm() {
               type="password"
               value={form.publicKey}
               onChange={(e) => setForm({ ...form, publicKey: e.target.value })}
+              autoComplete="new-password"
               placeholder="pk-lf-... (Langfuse)"
               className={inputClass}
             />
@@ -199,6 +201,7 @@ function TokenForm() {
               type="password"
               value={form.trackingKey}
               onChange={(e) => setForm({ ...form, trackingKey: e.target.value })}
+              autoComplete="new-password"
               placeholder="sk/trk-... (métricas por token)"
               className={inputClass}
             />
@@ -310,11 +313,12 @@ function TokenForm() {
           </label>
           <input
             type="password"
-            value={form.revealSecret}
-            onChange={(e) => setForm({ ...form, revealSecret: e.target.value })}
-            placeholder="Con esta clave podrás mostrar la key por 10s"
-            className={inputClass}
-          />
+              value={form.revealSecret}
+              onChange={(e) => setForm({ ...form, revealSecret: e.target.value })}
+              autoComplete="new-password"
+              placeholder="Con esta clave podrás mostrar la key por 10s"
+              className={inputClass}
+            />
           <p className="font-mono text-xs text-bone/40 mt-1.5">
             {"> se guarda hasheada y solo sirve para revelar la key con temporizador"}
           </p>

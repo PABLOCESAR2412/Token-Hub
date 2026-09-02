@@ -78,6 +78,7 @@ export function ChangePasswordScreen() {
               value={current}
               onChange={(e) => setCurrent(e.target.value)}
               autoFocus
+              autoComplete="current-password"
               placeholder="••••••••"
               className={inputClass}
             />
@@ -90,12 +91,13 @@ export function ChangePasswordScreen() {
           </label>
           <input
             type="password"
-            value={next}
-            onChange={(e) => setNext(e.target.value)}
-            autoFocus={recovery}
-            placeholder="Nueva contraseña"
-            className={inputClass}
-          />
+              value={next}
+              onChange={(e) => setNext(e.target.value)}
+              autoFocus={recovery}
+              autoComplete="new-password"
+              placeholder="Nueva contraseña"
+              className={inputClass}
+            />
         </div>
 
         <div>
@@ -104,11 +106,12 @@ export function ChangePasswordScreen() {
           </label>
           <input
             type="password"
-            value={confirm}
-            onChange={(e) => setConfirm(e.target.value)}
-            placeholder="Repetir la nueva"
-            className={inputClass}
-          />
+              value={confirm}
+              onChange={(e) => setConfirm(e.target.value)}
+              autoComplete="new-password"
+              placeholder="Repetir la nueva"
+              className={inputClass}
+            />
         </div>
 
         <button

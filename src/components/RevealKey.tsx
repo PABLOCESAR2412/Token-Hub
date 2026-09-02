@@ -83,6 +83,7 @@ export function RevealKey({
               type="password"
               value={secret}
               onChange={(e) => setSecret(e.target.value)}
+              autoComplete="current-password"
               placeholder={hasRevealSecret ? "Clave para ver" : "No configurada"}
               disabled={!hasRevealSecret}
               className="flex-1 bg-pure border border-bone/20 focus:border-electric outline-none px-3 py-2 text-sm font-mono placeholder:text-bone/30 transition-colors disabled:opacity-50"

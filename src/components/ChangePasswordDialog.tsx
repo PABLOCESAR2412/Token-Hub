@@ -68,6 +68,7 @@ export function ChangePasswordDialog({ onClose }: { onClose: () => void }) {
               value={current}
               onChange={(e) => setCurrent(e.target.value)}
               autoFocus
+              autoComplete="current-password"
               placeholder="••••••••"
               className={inputClass}
             />
@@ -78,6 +79,7 @@ export function ChangePasswordDialog({ onClose }: { onClose: () => void }) {
               type="password"
               value={next}
               onChange={(e) => setNext(e.target.value)}
+              autoComplete="new-password"
               placeholder="Nueva contraseña"
               className={inputClass}
             />
@@ -88,6 +90,7 @@ export function ChangePasswordDialog({ onClose }: { onClose: () => void }) {
               type="password"
               value={confirm}
               onChange={(e) => setConfirm(e.target.value)}
+              autoComplete="new-password"
               placeholder="Repetir la nueva"
               className={inputClass}
             />

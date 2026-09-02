@@ -755,6 +755,7 @@ function EditTokenCard({
                 type="password"
                 value={form.apiKey}
                 onChange={(e) => setForm({ ...form, apiKey: e.target.value })}
+                autoComplete="new-password"
                 placeholder="Dejar vacío para no cambiarla"
                 className={inputClass}
               />
@@ -783,6 +784,7 @@ function EditTokenCard({
                     type="password"
                     value={form.publicKey}
                     onChange={(e) => setForm({ ...form, publicKey: e.target.value })}
+                    autoComplete="new-password"
                     placeholder="pk-lf-... (Langfuse)"
                     className={inputClass}
                   />
@@ -797,6 +799,7 @@ function EditTokenCard({
                     type="password"
                     value={form.trackingKey}
                     onChange={(e) => setForm({ ...form, trackingKey: e.target.value })}
+                    autoComplete="new-password"
                     placeholder="sk/trk-... (métricas por token)"
                     className={inputClass}
                   />
@@ -827,6 +830,7 @@ function EditTokenCard({
               <input
                 type="password"
                 value={form.revealSecret}
+                autoComplete="new-password"
                 onChange={(e) => setForm({ ...form, revealSecret: e.target.value })}
                 placeholder="Para mostrar la key"
                 className={inputClass}

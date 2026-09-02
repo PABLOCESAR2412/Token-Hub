@@ -79,6 +79,7 @@ export function LoginScreen() {
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               autoFocus
+              autoComplete="current-password"
               className="w-full bg-pure border border-bone/20 focus:border-electric outline-none px-3 py-2.5 text-sm font-mono placeholder:text-bone/30 transition-colors"
               placeholder="••••••••"
             />
