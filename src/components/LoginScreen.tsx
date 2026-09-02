@@ -1,6 +1,7 @@
 import * as React from "react";
 import { useSession } from "../lib/use-session";
 import { Logo } from "../components/Logo";
+import { Eye, EyeOff } from "lucide-react";
 
 export function LoginScreen() {
   const { login } = useSession();
@@ -10,6 +11,7 @@ export function LoginScreen() {
   const [forgot, setForgot] = React.useState(false);
   const [code, setCode] = React.useState("");
   const [recovering, setRecovering] = React.useState(false);
+  const [showPassword, setShowPassword] = React.useState(false);
   const { recover } = useSession();
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -74,15 +76,25 @@ export function LoginScreen() {
             <label className="block font-mono text-xs uppercase text-bone/50 mb-2">
               [ Contraseña ]
             </label>
-            <input
-              type="password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              autoFocus
-              autoComplete="current-password"
-              className="w-full bg-pure border border-bone/20 focus:border-electric outline-none px-3 py-2.5 text-sm font-mono placeholder:text-bone/30 transition-colors"
-              placeholder="••••••••"
-            />
+            <div className="relative">
+              <input
+                type={showPassword ? "text" : "password"}
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                autoFocus
+                autoComplete="current-password"
+                className="w-full bg-pure border border-bone/20 focus:border-electric outline-none px-3 py-2.5 pr-10 text-sm font-mono placeholder:text-bone/30 transition-colors"
+                placeholder="••••••••"
+              />
+              <button
+                type="button"
+                onClick={() => setShowPassword((v) => !v)}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-bone/40 hover:text-electric transition-colors"
+                aria-label={showPassword ? "Ocultar contraseña" : "Mostrar contraseña"}
+              >
+                {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+              </button>
+            </div>
           </div>
 
           <button
