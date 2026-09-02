@@ -1,7 +1,12 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useAddToken } from "../../lib/hooks";
 import { PROVIDER_CATALOG } from "../../lib/providers/catalog";
-import { getProviderGuide, providerHasAnalytics } from "../../lib/providers/guides";
+import {
+  getProviderGuide,
+  providerHasAnalytics,
+  providerVisibleFields,
+  TAGS_HINT,
+} from "../../lib/providers/guides";
 import { ProviderHelpDialog, ProviderHelpTrigger } from "../../components/ProviderHelp";
 import * as React from "react";
 import { ArrowLeft, BarChart2, XCircle } from "lucide-react";
@@ -33,6 +38,7 @@ function TokenForm() {
   const guide = getProviderGuide(form.provider);
   const hasAnalytics = providerHasAnalytics(form.provider);
   const needs = guide?.requiredFields ?? ["apiKey"];
+  const visible = providerVisibleFields(form.provider);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -164,61 +170,63 @@ function TokenForm() {
           )}
         </div>
 
-        <div>
-          <label className="block font-mono text-xs uppercase text-bone/50 mb-2">
-            [ Public Key{needs.includes("publicKey") ? " *" : " (opcional)"} ]
-          </label>
-          <input
-            type="password"
-            value={form.publicKey}
-            onChange={(e) => setForm({ ...form, publicKey: e.target.value })}
-            placeholder="pk-lf-... (Langfuse)"
-            className={inputClass}
-          />
-          {needs.includes("publicKey") ? (
+        {visible.includes("publicKey") && (
+          <div>
+            <label className="block font-mono text-xs uppercase text-bone/50 mb-2">
+              [ Public Key{needs.includes("publicKey") ? " *" : " (opcional)"} ]
+            </label>
+            <input
+              type="password"
+              value={form.publicKey}
+              onChange={(e) => setForm({ ...form, publicKey: e.target.value })}
+              placeholder="pk-lf-... (Langfuse)"
+              className={inputClass}
+            />
             <p className="font-mono text-xs text-bone/40 mt-1.5">
-              {"> * obligatorio para este proveedor"} (p. ej. Langfuse public key)
+              {needs.includes("publicKey")
+                ? "> * obligatorio para este proveedor (ej: Langfuse public key)"
+                : "> se usa junto a la API Key (ej: Langfuse public key) para métricas"}
             </p>
-          ) : (
+          </div>
+        )}
+
+        {visible.includes("trackingKey") && (
+          <div>
+            <label className="block font-mono text-xs uppercase text-bone/50 mb-2">
+              [ Tracking Key (opcional) ]
+            </label>
+            <input
+              type="password"
+              value={form.trackingKey}
+              onChange={(e) => setForm({ ...form, trackingKey: e.target.value })}
+              placeholder="sk/trk-... (métricas por token)"
+              className={inputClass}
+            />
             <p className="font-mono text-xs text-bone/40 mt-1.5">
-              {"> se usa junto a la API Key (p. ej. Langfuse public key) para métricas"}
+              {"> clave secundaria para proveedores que exponen métricas por token"}
             </p>
-          )}
-        </div>
+          </div>
+        )}
 
-        <div>
-          <label className="block font-mono text-xs uppercase text-bone/50 mb-2">
-            [ Tracking Key (opcional) ]
-          </label>
-          <input
-            type="password"
-            value={form.trackingKey}
-            onChange={(e) => setForm({ ...form, trackingKey: e.target.value })}
-            placeholder="sk/trk-... (métricas por token)"
-            className={inputClass}
-          />
-          <p className="font-mono text-xs text-bone/40 mt-1.5">
-            {"> clave secundaria para proveedores que expongan métricas por token"}
-          </p>
-        </div>
-
-        <div>
-          <label className="block font-mono text-xs uppercase text-bone/50 mb-2">
-            [ Base URL{needs.includes("baseUrl") ? " *" : " (opcional)"} ]
-          </label>
-          <input
-            type="text"
-            value={form.baseUrl}
-            onChange={(e) => setForm({ ...form, baseUrl: e.target.value })}
-            placeholder="https://cloud.langfuse.com"
-            className={inputClass}
-          />
-          <p className="font-mono text-xs text-bone/40 mt-1.5">
-            {needs.includes("baseUrl")
-              ? "> * obligatorio para este proveedor"
-              : "> override del endpoint del proveedor (default = cloud.langfuse.com)"}
-          </p>
-        </div>
+        {visible.includes("baseUrl") && (
+          <div>
+            <label className="block font-mono text-xs uppercase text-bone/50 mb-2">
+              [ Base URL{needs.includes("baseUrl") ? " *" : " (opcional)"} ]
+            </label>
+            <input
+              type="text"
+              value={form.baseUrl}
+              onChange={(e) => setForm({ ...form, baseUrl: e.target.value })}
+              placeholder="https://..."
+              className={inputClass}
+            />
+            <p className="font-mono text-xs text-bone/40 mt-1.5">
+              {needs.includes("baseUrl")
+                ? "> * obligatorio para este proveedor"
+                : "> override del endpoint del proveedor (ej: localhost para Ollama/LM Studio)"}
+            </p>
+          </div>
+        )}
 
         <div>
           <label className="block font-mono text-xs uppercase text-bone/50 mb-2">
@@ -245,7 +253,8 @@ function TokenForm() {
             className={inputClass}
           />
           <p className="font-mono text-xs text-bone/40 mt-1.5">
-            {"> etiquetas para buscar y filtrar tokens en el dashboard"}
+            {"> "}
+            {TAGS_HINT}
           </p>
         </div>
 

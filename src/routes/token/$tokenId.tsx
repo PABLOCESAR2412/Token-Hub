@@ -3,7 +3,7 @@ import { useToken, useDeleteToken, useAddSnapshot, useUpdateToken, useTotpStatus
 import { RevealKey } from "../../components/RevealKey";
 import { ConfirmDialog, useConfirmDialog } from "../../components/ConfirmDialog";
 import { PROVIDER_CATALOG } from "../../lib/providers/catalog";
-import { getProviderGuide, providerHasAnalytics } from "../../lib/providers/guides";
+import { getProviderGuide, providerHasAnalytics, providerVisibleFields, TAGS_HINT } from "../../lib/providers/guides";
 import { ProviderHelpDialog, ProviderHelpTrigger } from "../../components/ProviderHelp";
 import { getProviderBySlug } from "../../lib/providers";
 import type { Token } from "../../lib/types";
@@ -617,6 +617,7 @@ function EditTokenCard({
   const guide = getProviderGuide(form.provider);
   const hasAnalytics = providerHasAnalytics(form.provider);
   const needs = guide?.requiredFields ?? ["apiKey"];
+  const visible = providerVisibleFields(form.provider);
 
   // Auto-dismiss the success banner a few seconds after it appears.
   React.useEffect(() => {
@@ -771,46 +772,54 @@ function EditTokenCard({
             </div>
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <div>
-              <label className="block font-mono text-xs uppercase text-bone/50 mb-1.5">
-                [ Public Key{needs.includes("publicKey") ? " *" : ""} (vacío = mantener) ]
-              </label>
-              <input
-                type="password"
-                value={form.publicKey}
-                onChange={(e) => setForm({ ...form, publicKey: e.target.value })}
-                placeholder="pk-lf-... (Langfuse)"
-                className={inputClass}
-              />
+          {(visible.includes("publicKey") || visible.includes("trackingKey")) && (
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              {visible.includes("publicKey") && (
+                <div>
+                  <label className="block font-mono text-xs uppercase text-bone/50 mb-1.5">
+                    [ Public Key{needs.includes("publicKey") ? " *" : ""} (vacío = mantener) ]
+                  </label>
+                  <input
+                    type="password"
+                    value={form.publicKey}
+                    onChange={(e) => setForm({ ...form, publicKey: e.target.value })}
+                    placeholder="pk-lf-... (Langfuse)"
+                    className={inputClass}
+                  />
+                </div>
+              )}
+              {visible.includes("trackingKey") && (
+                <div>
+                  <label className="block font-mono text-xs uppercase text-bone/50 mb-1.5">
+                    [ Tracking Key (vacío = mantener) ]
+                  </label>
+                  <input
+                    type="password"
+                    value={form.trackingKey}
+                    onChange={(e) => setForm({ ...form, trackingKey: e.target.value })}
+                    placeholder="sk/trk-... (métricas por token)"
+                    className={inputClass}
+                  />
+                </div>
+              )}
             </div>
-            <div>
-              <label className="block font-mono text-xs uppercase text-bone/50 mb-1.5">
-                [ Tracking Key (vacío = mantener) ]
-              </label>
-              <input
-                type="password"
-                value={form.trackingKey}
-                onChange={(e) => setForm({ ...form, trackingKey: e.target.value })}
-                placeholder="sk/trk-... (métricas por token)"
-                className={inputClass}
-              />
-            </div>
-          </div>
+          )}
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <div>
-              <label className="block font-mono text-xs uppercase text-bone/50 mb-1.5">
-                [ Base URL{needs.includes("baseUrl") ? " *" : ""} ]
-              </label>
-              <input
-                type="text"
-                value={form.baseUrl}
-                onChange={(e) => setForm({ ...form, baseUrl: e.target.value })}
-                placeholder="https://cloud.langfuse.com"
-                className={inputClass}
-              />
-            </div>
+            {visible.includes("baseUrl") && (
+              <div>
+                <label className="block font-mono text-xs uppercase text-bone/50 mb-1.5">
+                  [ Base URL{needs.includes("baseUrl") ? " *" : ""} ]
+                </label>
+                <input
+                  type="text"
+                  value={form.baseUrl}
+                  onChange={(e) => setForm({ ...form, baseUrl: e.target.value })}
+                  placeholder="https://..."
+                  className={inputClass}
+                />
+              </div>
+            )}
             <div>
               <label className="block font-mono text-xs uppercase text-bone/50 mb-1.5">
                 [ Clave para ver (vacío = mantener) ]
@@ -836,6 +845,10 @@ function EditTokenCard({
               placeholder="agente, gpt, produccion"
               className={inputClass}
             />
+            <p className="font-mono text-xs text-bone/40 mt-1.5">
+              {"> "}
+              {TAGS_HINT}
+            </p>
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
