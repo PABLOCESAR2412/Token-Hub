@@ -234,43 +234,41 @@ export async function forwardChatRequest(
   const totalTokens = usage.total_tokens ?? promptTokens + completionTokens;
   const calculatedCost = estimateCost(target.cleanModel, promptTokens, completionTokens);
 
-  // Background logging to Convex without blocking response
-  void (async () => {
-    try {
-      const adapter = await loadAdapter();
-      await adapter.addSnapshot(target.token.id, {
-        tokensUsed: totalTokens,
-        cost: calculatedCost,
-        model: target.cleanModel,
-        inputTokens: promptTokens,
-        outputTokens: completionTokens,
-        provider: target.token.provider,
-      });
+  // Synchronous logging to Convex to ensure persistence in Serverless environments
+  try {
+    const adapter = await loadAdapter();
+    await adapter.addSnapshot(target.token.id, {
+      tokensUsed: totalTokens,
+      cost: calculatedCost,
+      model: target.cleanModel,
+      inputTokens: promptTokens,
+      outputTokens: completionTokens,
+      provider: target.token.provider,
+    });
 
-      // Update total cost on token
-      await adapter.updateToken({
-        id: target.token.id,
-        totalCost: target.token.totalCost + calculatedCost,
-      });
+    // Update total cost on token
+    await adapter.updateToken({
+      id: target.token.id,
+      totalCost: target.token.totalCost + calculatedCost,
+    });
 
-      // Gatekeeper check: if newly added cost crosses cap, pause token & audit
-      if (
-        typeof target.token.maxUsd === "number" &&
-        target.token.maxUsd > 0 &&
-        target.token.totalCost + calculatedCost >= target.token.maxUsd
-      ) {
-        await adapter.setTokenActive(target.token.id, false);
-        await adapter.addAudit({
-          tokenId: target.token.id,
-          tokenName: target.token.name,
-          action: "gatekeeper_auto_pause",
-          detail: `// Límite mensual de $${target.token.maxUsd.toFixed(2)} USD alcanzado. Token pausado.`,
-        });
-      }
-    } catch (err: any) {
-      console.error("Failed to log proxy usage snapshot:", err.message);
+    // Gatekeeper check: if newly added cost crosses cap, pause token & audit
+    if (
+      typeof target.token.maxUsd === "number" &&
+      target.token.maxUsd > 0 &&
+      target.token.totalCost + calculatedCost >= target.token.maxUsd
+    ) {
+      await adapter.setTokenActive(target.token.id, false);
+      await adapter.addAudit({
+        tokenId: target.token.id,
+        tokenName: target.token.name,
+        action: "gatekeeper_auto_pause",
+        detail: `// Límite mensual de $${target.token.maxUsd.toFixed(2)} USD alcanzado. Token pausado.`,
+      });
     }
-  })();
+  } catch (err: any) {
+    console.error("Failed to log proxy usage snapshot:", err.message);
+  }
 
   return Response.json(data);
 }
