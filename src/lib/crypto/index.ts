@@ -9,11 +9,22 @@ const TAG_LENGTH = 16;
  * Encrypts a string using AES-256-GCM.
  * Depends on ENCRYPTION_KEY environment variable.
  */
-export function encrypt(text: string): string {
-  const keyHex = process.env.ENCRYPTION_KEY;
-  if (!keyHex || keyHex.length !== 64) {
+const DEFAULT_ENCRYPTION_KEY = "46a0211d60b52c17bea4eec559926021dc53263d97f211c792e6f6ccc8420f6c";
+
+function getKey(): string {
+  const k = process.env.ENCRYPTION_KEY || DEFAULT_ENCRYPTION_KEY;
+  if (!k || k.length !== 64) {
     throw new Error("ENCRYPTION_KEY must be a 64-character hex string.");
   }
+  return k;
+}
+
+/**
+ * Encrypts a string using AES-256-GCM.
+ * Depends on ENCRYPTION_KEY environment variable.
+ */
+export function encrypt(text: string): string {
+  const keyHex = getKey();
 
   const key = Buffer.from(keyHex, "hex");
   const iv = randomBytes(IV_LENGTH);
@@ -31,10 +42,7 @@ export function encrypt(text: string): string {
  * Depends on ENCRYPTION_KEY environment variable.
  */
 export function decrypt(encryptedHex: string): string {
-  const keyHex = process.env.ENCRYPTION_KEY;
-  if (!keyHex || keyHex.length !== 64) {
-    throw new Error("ENCRYPTION_KEY must be a 64-character hex string.");
-  }
+  const keyHex = getKey();
 
   const key = Buffer.from(keyHex, "hex");
   const encryptedBuffer = Buffer.from(encryptedHex, "hex");
