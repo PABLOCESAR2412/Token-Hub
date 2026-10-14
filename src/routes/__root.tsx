@@ -25,33 +25,29 @@ const queryClient = new QueryClient({
 });
 
 export const Route = createRootRoute({
-  ...(isProduction
-    ? {
-        head: () => ({
-          meta: [
-            { charSet: "utf-8" },
-            { name: "viewport", content: "width=device-width, initial-scale=1.0" },
-            {
-              title: "Agent Token Hub | Token SYS v001",
-            },
-            {
-              name: "description",
-              content: "Gestor de API keys y seguimiento de uso de tokens para agentes de IA.",
-            },
-          ],
-          links: [
-            { rel: "icon", type: "image/x-icon", href: "/favicon.ico" },
-            { rel: "icon", type: "image/svg+xml", href: "/favicon.svg" },
-            { rel: "preconnect", href: "https://fonts.googleapis.com" },
-            { rel: "preconnect", href: "https://fonts.gstatic.com", crossOrigin: "" },
-            {
-              rel: "stylesheet",
-              href: "https://fonts.googleapis.com/css2?family=Inter:wght@400;600;900&family=JetBrains+Mono:wght@400;700&display=swap",
-            },
-          ],
-        }),
-      }
-    : {}),
+  head: () => ({
+    meta: [
+      { charSet: "utf-8" },
+      { name: "viewport", content: "width=device-width, initial-scale=1.0" },
+      {
+        title: "Agent Token Hub | Token SYS v001",
+      },
+      {
+        name: "description",
+        content: "Gestor de API keys y seguimiento de uso de tokens para agentes de IA.",
+      },
+    ],
+    links: [
+      { rel: "icon", type: "image/x-icon", href: "/favicon.ico" },
+      { rel: "icon", type: "image/svg+xml", href: "/favicon.svg" },
+      { rel: "preconnect", href: "https://fonts.googleapis.com" },
+      { rel: "preconnect", href: "https://fonts.gstatic.com", crossOrigin: "" },
+      {
+        rel: "stylesheet",
+        href: "https://fonts.googleapis.com/css2?family=Inter:wght@400;600;900&family=JetBrains+Mono:wght@400;700&display=swap",
+      },
+    ],
+  }),
   component: RootComponent,
 });
 
@@ -64,7 +60,8 @@ function RootComponent() {
 }
 
 function AppLayout() {
-  const isProd = process.env.APP_MODE === "production";
+  const isDemo = process.env.APP_MODE === "demo";
+  const isProd = !isDemo;
 
   const inner = (
     <div className="min-h-screen flex flex-col">
@@ -82,7 +79,7 @@ function AppLayout() {
             <span className="text-electric font-bold">ONLINE</span>
           </span>
           <span className="border border-bone/20 px-2 py-1 text-bone/60">
-            MODE: <span className="text-electric">{process.env.APP_MODE || "demo"}</span>
+            MODE: <span className="text-electric">{isProd ? "production" : "demo"}</span>
           </span>
           {isProd && <HeaderActions />}
         </div>
@@ -109,7 +106,7 @@ function AppLayout() {
     </div>
   );
 
-  if (!isProd) {
+  if (isDemo && typeof document !== "undefined" && document.getElementById("root")) {
     return inner;
   }
 

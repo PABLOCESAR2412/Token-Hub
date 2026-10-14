@@ -31,8 +31,12 @@ export default defineConfig(() => ({
     },
   },
   define: {
-    "process.env.APP_MODE": JSON.stringify(process.env.APP_MODE || "production"),
-    "process.env.APP_STORAGE": JSON.stringify(process.env.APP_STORAGE || "convex"),
+    "process.env.APP_MODE": JSON.stringify(process.env.APP_MODE === "demo" ? "demo" : "production"),
+    "process.env.APP_STORAGE": JSON.stringify(
+      process.env.APP_MODE === "convex" || process.env.APP_STORAGE === "convex"
+        ? "convex"
+        : process.env.APP_STORAGE || "convex"
+    ),
     "process.env.PROYECT_CONVEX_URL": JSON.stringify(
       process.env.PROYECT_CONVEX_URL ||
         process.env.PROJECT_CONVEX_URL ||
