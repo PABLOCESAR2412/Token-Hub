@@ -12,11 +12,11 @@ const TAG_LENGTH = 16;
 const DEFAULT_ENCRYPTION_KEY = "46a0211d60b52c17bea4eec559926021dc53263d97f211c792e6f6ccc8420f6c";
 
 function getKey(): string {
-  const k = process.env.ENCRYPTION_KEY || DEFAULT_ENCRYPTION_KEY;
-  if (!k || k.length !== 64) {
-    throw new Error("ENCRYPTION_KEY must be a 64-character hex string.");
+  const envVal = process.env.ENCRYPTION_KEY?.trim();
+  if (envVal && envVal.length === 64 && /^[0-9a-fA-F]{64}$/.test(envVal)) {
+    return envVal;
   }
-  return k;
+  return DEFAULT_ENCRYPTION_KEY;
 }
 
 /**
