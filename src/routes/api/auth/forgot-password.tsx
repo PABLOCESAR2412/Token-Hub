@@ -1,27 +1,55 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { setCookie } from "@tanstack/react-start/server";
 import { createSessionToken, COOKIE_NAME } from "../../../lib/auth";
-import { verifyOwnerTotp, getTotpEnabled } from "../../../lib/credentials";
+import { verifyOwnerTotp, getTotpEnabled, getAuthState, DEFAULT_PASSWORD } from "../../../lib/credentials";
 
-// Recovery flow: the owner forgot the password, so they authenticate with the
-// 2FA code first, then are taken to the change-password screen (recovery session).
+// Recovery flow: the owner forgot the password, so they authenticate with
+// either their 2FA code or their environment AUTH_PASSWORD, or if 2FA is not
+// configured, they are guided to use the initial password or master key.
 export const Route = createFileRoute("/api/auth/forgot-password")({
   server: {
     handlers: {
       POST: async ({ request }) => {
         try {
           const body = (await request.json().catch(() => ({}))) as { code?: string };
-          if (!body.code || !/^\d{6}$/.test(body.code)) {
-            return Response.json({ error: "// Ingresa tu codigo 2FA de 6 digitos" }, { status: 400 });
+          const input = (body.code || "").trim();
+          if (!input) {
+            return Response.json({ error: "// Ingresa tu código 2FA o clave maestra" }, { status: 400 });
           }
 
-          if (!(await getTotpEnabled())) {
-            return Response.json({ error: "// 2FA no configurado: no hay forma de recuperar la contraseña" }, { status: 400 });
+          const hasTotp = await getTotpEnabled();
+          const masterSecret = process.env.AUTH_PASSWORD;
+          let ok = false;
+
+          // 1. Verify against master AUTH_PASSWORD configured in environment
+          if (masterSecret && input === masterSecret) {
+            ok = true;
           }
 
-          const ok = await verifyOwnerTotp(body.code);
+          // 2. Verify against 2FA TOTP code if enabled
+          if (!ok && hasTotp && /^\d{6}$/.test(input)) {
+            ok = await verifyOwnerTotp(input);
+          }
+
+          // 3. Handle when 2FA is not enabled
+          if (!ok && !hasTotp) {
+            const { mustChangePassword } = await getAuthState();
+            if (input === DEFAULT_PASSWORD) {
+              ok = true;
+            } else {
+              return Response.json(
+                {
+                  error: mustChangePassword
+                    ? `// 2FA no configurado aún. La contraseña actual es la inicial: ${DEFAULT_PASSWORD}`
+                    : "// 2FA no configurado. Ingresa el AUTH_PASSWORD maestro configurado en tus variables de entorno.",
+                },
+                { status: 400 }
+              );
+            }
+          }
+
           if (!ok) {
-            return Response.json({ error: "// Codigo 2FA incorrecto" }, { status: 401 });
+            return Response.json({ error: "// Código 2FA o clave maestra incorrecta" }, { status: 401 });
           }
 
           setCookie(COOKIE_NAME, createSessionToken("recovery"), {

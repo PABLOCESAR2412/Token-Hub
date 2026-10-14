@@ -33,12 +33,12 @@ export function LoginScreen() {
   const handleRecover = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
-    if (!/^\d{6}$/.test(code)) {
-      setError("// Ingresa el codigo 2FA de 6 digitos");
+    if (!code.trim()) {
+      setError("// Ingresa tu código 2FA o clave maestra");
       return;
     }
     setRecovering(true);
-    const err = await recover(code);
+    const err = await recover(code.trim());
     setRecovering(false);
     if (err) setError(err);
   };
@@ -131,7 +131,7 @@ export function LoginScreen() {
                 Autenticar primero
               </h1>
               <p className="font-mono text-xs text-bone/40 mt-3">
-                {"> para recuperar la contraseña verifica tu codigo 2FA"}
+                {"> ingresa tu código 2FA o tu clave maestra de entorno (AUTH_PASSWORD)"}
               </p>
             </div>
           </div>
@@ -144,18 +144,15 @@ export function LoginScreen() {
 
           <div>
             <label className="block font-mono text-xs uppercase text-bone/50 mb-2">
-              [ Codigo 2FA ]
+              [ Código 2FA o Clave Maestra ]
             </label>
             <input
               type="text"
-              inputMode="numeric"
-              pattern="[0-9]*"
-              maxLength={6}
               value={code}
-              onChange={(e) => setCode(e.target.value.replace(/[^0-9]/g, ""))}
+              onChange={(e) => setCode(e.target.value)}
               autoFocus
-              placeholder="000000"
-              className="w-full bg-pure border border-bone/20 focus:border-electric outline-none px-3 py-2.5 text-sm font-mono tracking-[0.5em] placeholder:text-bone/30 transition-colors"
+              placeholder="000000 o AUTH_PASSWORD"
+              className="w-full bg-pure border border-bone/20 focus:border-electric outline-none px-3 py-2.5 text-sm font-mono placeholder:text-bone/30 transition-colors"
             />
           </div>
 

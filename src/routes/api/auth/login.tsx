@@ -16,7 +16,15 @@ export const Route = createFileRoute("/api/auth/login")({
 
           const ok = await verifyOwnerPassword(body.password);
           if (!ok) {
-            return Response.json({ error: "Invalid password" }, { status: 401 });
+            const state = await getAuthState();
+            return Response.json(
+              {
+                error: state.mustChangePassword
+                  ? `// Contraseña incorrecta. Usa la contraseña inicial por defecto: ${DEFAULT_PASSWORD}`
+                  : "// Contraseña incorrecta",
+              },
+              { status: 401 }
+            );
           }
 
           const { mustChangePassword } = await getAuthState();
