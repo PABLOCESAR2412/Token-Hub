@@ -98,6 +98,7 @@ async function mapToken(db: any): Promise<Token> {
   return {
     id: db.tokenId,
     name: db.name,
+    slug: db.slug || db.tokenId,
     provider: db.provider || "unknown",
     encryptedValue: db.encryptedValue,
     maskedValue: maskKey(decryptedValue),

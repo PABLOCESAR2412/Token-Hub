@@ -56,49 +56,70 @@ export async function resolveUpstreamTarget(
   const masterPassword = process.env.AUTH_PASSWORD;
 
   let selectedToken: Token | null = null;
-  let cleanModel = modelRequested;
+  let cleanModel = modelRequested || "default";
 
-  // 1. Check if auth header matches a specific token slug
-  const matchedBySlug = allTokens.find((t) => t.slug === rawKey);
-  if (matchedBySlug) {
-    selectedToken = matchedBySlug;
-  }
-
-  // 2. If master password or generic key, route by model prefix or model naming
-  if (!selectedToken && (rawKey === masterPassword || !rawKey || rawKey.startsWith("ath_"))) {
-    if (modelRequested.includes("/")) {
-      const [prefix, ...rest] = modelRequested.split("/");
-      cleanModel = rest.join("/");
-      selectedToken =
-        allTokens.find(
-          (t) =>
-            t.provider.toLowerCase() === prefix.toLowerCase() ||
-            t.name.toLowerCase() === prefix.toLowerCase()
-        ) || null;
-    }
-
-    if (!selectedToken) {
-      const q = modelRequested.toLowerCase();
-      if (q.includes("deepseek")) {
-        selectedToken = allTokens.find((t) => t.provider === "deepseek") || null;
-      } else if (q.includes("gemini")) {
-        selectedToken = allTokens.find((t) => t.provider === "google") || null;
-      } else if (q.includes("groq") || q.includes("llama") || q.includes("qwen") || q.includes("mixtral")) {
-        selectedToken = allTokens.find((t) => t.provider === "groq") || null;
-      } else if (q.includes("gpt") || q.includes("o1") || q.includes("o3")) {
-        selectedToken = allTokens.find((t) => t.provider === "openai") || null;
-      } else if (q.includes("claude") || q.includes("minimax")) {
-        selectedToken = allTokens.find((t) => t.provider === "openrouter") || null;
+  // Check if model has a provider prefix, e.g. "groq/llama-3.3-70b" or "google/gemini-2.5-flash"
+  if (cleanModel.includes("/")) {
+    const [prefix, ...rest] = cleanModel.split("/");
+    const matchByPrefix = allTokens.find(
+      (t) =>
+        t.provider.toLowerCase() === prefix.toLowerCase() ||
+        t.name.toLowerCase() === prefix.toLowerCase()
+    );
+    if (matchByPrefix) {
+      selectedToken = matchByPrefix;
+      // If the provider is openrouter, keep full model path like "anthropic/claude-3.5-sonnet"
+      if (matchByPrefix.provider.toLowerCase() !== "openrouter") {
+        cleanModel = rest.join("/");
       }
     }
+  }
 
-    // Default fallback to OpenRouter or first active token
-    if (!selectedToken) {
-      selectedToken =
-        allTokens.find((t) => t.provider === "openrouter" && t.active) ||
-        allTokens.find((t) => t.active) ||
-        allTokens[0];
+  // Check if auth header matches a specific token slug, id, or provider name
+  if (!selectedToken && rawKey) {
+    selectedToken =
+      allTokens.find(
+        (t) =>
+          t.slug === rawKey ||
+          t.id === rawKey ||
+          t.name.toLowerCase() === rawKey.toLowerCase() ||
+          t.provider.toLowerCase() === rawKey.toLowerCase()
+      ) || null;
+  }
+
+  // If still not matched, route by model name keyword
+  if (!selectedToken) {
+    const q = cleanModel.toLowerCase();
+    if (q.includes("deepseek")) {
+      selectedToken = allTokens.find((t) => t.provider === "deepseek") || null;
+    } else if (q.includes("gemini")) {
+      selectedToken = allTokens.find((t) => t.provider === "google") || null;
+    } else if (q.includes("groq") || q.includes("llama") || q.includes("qwen") || q.includes("mixtral")) {
+      selectedToken = allTokens.find((t) => t.provider === "groq") || null;
+    } else if (q.includes("gpt") || q.includes("o1") || q.includes("o3")) {
+      selectedToken = allTokens.find((t) => t.provider === "openai") || null;
+    } else if (q.includes("claude") || q.includes("minimax")) {
+      selectedToken = allTokens.find((t) => t.provider === "openrouter") || null;
     }
+  }
+
+  // Default fallback to first active token (preferably OpenRouter or Groq)
+  if (!selectedToken) {
+    selectedToken =
+      allTokens.find((t) => t.provider === "openrouter" && t.active) ||
+      allTokens.find((t) => t.provider === "groq" && t.active) ||
+      allTokens.find((t) => t.active) ||
+      allTokens[0];
+  }
+
+  // Assign sane default model if "default" was requested
+  if (cleanModel === "default" || !cleanModel) {
+    const p = selectedToken?.provider?.toLowerCase();
+    if (p === "groq") cleanModel = "llama-3.3-70b-versatile";
+    else if (p === "deepseek") cleanModel = "deepseek-chat";
+    else if (p === "google") cleanModel = "gemini-2.0-flash";
+    else if (p === "openrouter") cleanModel = "google/gemini-2.0-flash-lite-preview-02-05:free";
+    else cleanModel = "gpt-4o-mini";
   }
 
   if (!selectedToken) {

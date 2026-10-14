@@ -7,6 +7,7 @@ export interface Provider {
 export interface Token {
   id: string;
   name: string;
+  slug?: string;
   provider: string;
   encryptedValue: string;
   maskedValue: string;
