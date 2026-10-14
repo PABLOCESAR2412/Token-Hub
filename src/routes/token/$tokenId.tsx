@@ -1,6 +1,7 @@
 import { createFileRoute, Link, useRouter } from "@tanstack/react-router";
 import { useToken, useDeleteToken, useAddSnapshot, useUpdateToken, useTotpStatus, useSetTokenActive, useAuditLog } from "../../lib/hooks";
 import { RevealKey } from "../../components/RevealKey";
+import { LiveKeyInspector } from "../../components/LiveKeyInspector";
 import { ConfirmDialog, useConfirmDialog } from "../../components/ConfirmDialog";
 import { PROVIDER_CATALOG } from "../../lib/providers/catalog";
 import { getProviderGuide, providerHasAnalytics, providerVisibleFields, TAGS_HINT } from "../../lib/providers/guides";
@@ -208,6 +209,8 @@ function TokenDetail() {
           Cuota: {token.quota === 0 ? "Ilimitada" : token.quota.toLocaleString()}
         </div>
       </div>
+
+      <LiveKeyInspector tokenId={token.id} tokenName={token.name} provider={token.provider} />
 
       <EditTokenCard
         token={token}

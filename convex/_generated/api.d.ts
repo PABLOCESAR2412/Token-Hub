@@ -10,6 +10,8 @@
 
 import type * as audits from "../audits.js";
 import type * as auth from "../auth.js";
+import type * as crons from "../crons.js";
+import type * as cronsJob from "../cronsJob.js";
 import type * as migration from "../migration.js";
 import type * as seed from "../seed.js";
 import type * as snapshots from "../snapshots.js";
@@ -24,6 +26,8 @@ import type {
 declare const fullApi: ApiFromModules<{
   audits: typeof audits;
   auth: typeof auth;
+  crons: typeof crons;
+  cronsJob: typeof cronsJob;
   migration: typeof migration;
   seed: typeof seed;
   snapshots: typeof snapshots;

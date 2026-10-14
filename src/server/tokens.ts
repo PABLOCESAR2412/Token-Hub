@@ -133,3 +133,23 @@ export const addSnapshot = createServerFn({ method: "POST" })
       outputTokens: data.outputTokens ?? 0,
     });
   });
+
+export const inspectToken = createServerFn({ method: "POST" })
+  .validator((tokenId: string) => tokenId)
+  .handler(async ({ data }) => {
+    if (!isAuthorized(getRequest())) return unauthorizedResponse();
+    const adapter = await loadAdapter();
+    const token = await adapter.getToken(data);
+    if (!token) throw new Error("Token no encontrado");
+
+    const { inspectProviderKey } = await import("../lib/providers/inspector");
+    const { decrypt } = await import("../lib/crypto");
+
+    return await inspectProviderKey({
+      provider: token.provider,
+      apiKey: decrypt(token.encryptedValue),
+      publicKey: token.publicKey ? decrypt(token.publicKey) : null,
+      trackingKey: token.trackingKey ? decrypt(token.trackingKey) : null,
+      baseUrl: token.baseUrl,
+    });
+  });

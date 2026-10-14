@@ -293,3 +293,18 @@ export function useAuditLog(tokenId?: string) {
     retry: false,
   });
 }
+
+export function useInspectToken(tokenId?: string) {
+  return useQuery({
+    queryKey: ["inspectToken", tokenId],
+    queryFn: async () => {
+      if (!tokenId) throw new Error("No token ID");
+      const fns = await getServerFns();
+      return (await callServer(() => fns.inspectToken({ data: tokenId }))) as import("./providers/inspector").LiveInspectionResult;
+    },
+    enabled: false,
+    retry: false,
+    staleTime: 60 * 1000,
+  });
+}
+
