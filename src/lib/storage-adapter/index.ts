@@ -50,6 +50,20 @@ export interface StorageAdapter {
 }
 
 async function loadAdapter(): Promise<StorageAdapter> {
+  const hasConvex =
+    process.env.APP_STORAGE === "convex" ||
+    (!process.env.APP_STORAGE &&
+      !!(
+        process.env.PROYECT_CONVEX_URL ||
+        process.env.PROJECT_CONVEX_URL ||
+        process.env.CONVEX_URL ||
+        process.env.VITE_CONVEX_URL
+      ));
+
+  if (hasConvex) {
+    const { convexAdapter } = await import("./convex");
+    return convexAdapter;
+  }
   if (process.env.APP_STORAGE === "supabase") {
     const { supabaseAdapter } = await import("./supabase");
     return supabaseAdapter;

@@ -85,7 +85,7 @@ export function useSession() {
       expiresAt?: number | null;
       hint?: string;
     };
-    if (!res.ok) return json.error || "Error";
+    if (!res.ok) return json.error || (json as any).message || `// Error al conectar con el servidor (${res.status})`;
     setState({
       authed: true,
       mustChangePassword: json.mustChangePassword === true,
