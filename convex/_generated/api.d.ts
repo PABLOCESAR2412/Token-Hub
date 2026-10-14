@@ -10,6 +10,7 @@
 
 import type * as audits from "../audits.js";
 import type * as auth from "../auth.js";
+import type * as migration from "../migration.js";
 import type * as seed from "../seed.js";
 import type * as snapshots from "../snapshots.js";
 import type * as tokens from "../tokens.js";
@@ -23,6 +24,7 @@ import type {
 declare const fullApi: ApiFromModules<{
   audits: typeof audits;
   auth: typeof auth;
+  migration: typeof migration;
   seed: typeof seed;
   snapshots: typeof snapshots;
   tokens: typeof tokens;
