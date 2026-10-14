@@ -68,10 +68,7 @@ export async function resolveUpstreamTarget(
     );
     if (matchByPrefix) {
       selectedToken = matchByPrefix;
-      // If the provider is openrouter, keep full model path like "anthropic/claude-3.5-sonnet"
-      if (matchByPrefix.provider.toLowerCase() !== "openrouter") {
-        cleanModel = rest.join("/");
-      }
+      cleanModel = rest.join("/");
     }
   }
 
