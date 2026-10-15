@@ -26,6 +26,11 @@ const COST_ESTIMATES_PER_1M: Record<string, { prompt: number; completion: number
   "deepseek-chat": { prompt: 0.14, completion: 0.28 },
   "deepseek-reasoner": { prompt: 0.55, completion: 2.19 },
   "llama-3.3-70b": { prompt: 0.59, completion: 0.79 },
+  "gemini-4-argon": { prompt: 2.0, completion: 8.0 },
+  argon: { prompt: 2.0, completion: 8.0 },
+  "gemini-4-flash": { prompt: 0.2, completion: 0.8 },
+  "gemini-2.5-pro": { prompt: 1.25, completion: 5.0 },
+  "gemini-2.5-flash": { prompt: 0.15, completion: 0.6 },
   "gemini-2.0-flash": { prompt: 0.1, completion: 0.4 },
   "gemini-1.5-pro": { prompt: 1.25, completion: 5.0 },
   default: { prompt: 0.5, completion: 1.5 },
@@ -50,7 +55,7 @@ export function buildTargetForToken(token: Token, modelRequested: string): Upstr
   if (cleanModel === "default" || !cleanModel) {
     if (p === "groq") cleanModel = "llama-3.3-70b-versatile";
     else if (p === "deepseek") cleanModel = "deepseek-chat";
-    else if (p === "google" || p === "gemini") cleanModel = "gemini-2.0-flash";
+    else if (p === "google" || p === "gemini") cleanModel = "gemini-4-argon";
     else if (p === "openrouter") cleanModel = "google/gemini-2.0-flash-lite-preview-02-05:free";
     else if (p === "nvidia") cleanModel = "meta/llama-3.3-70b-instruct";
     else cleanModel = "gpt-4o-mini";
@@ -58,8 +63,12 @@ export function buildTargetForToken(token: Token, modelRequested: string): Upstr
     // If fallback switched to a provider with non-compatible model names, pick equivalent
     if (p === "groq" && (cleanModel.includes("gemini") || cleanModel.includes("gpt") || cleanModel.includes("claude"))) {
       cleanModel = "llama-3.3-70b-versatile";
-    } else if (p === "google" && (cleanModel.includes("llama") || cleanModel.includes("gpt") || cleanModel.includes("claude"))) {
-      cleanModel = "gemini-2.0-flash";
+    } else if (p === "google" || p === "gemini") {
+      if (cleanModel.toLowerCase().includes("argon")) {
+        cleanModel = "gemini-4-argon";
+      } else if (cleanModel.includes("llama") || cleanModel.includes("gpt") || cleanModel.includes("claude")) {
+        cleanModel = "gemini-4-argon";
+      }
     } else if (p === "openai" && (cleanModel.includes("gemini") || cleanModel.includes("llama") || cleanModel.includes("claude"))) {
       cleanModel = "gpt-4o-mini";
     } else if (p === "nvidia" && (cleanModel.includes("gemini") || cleanModel.includes("gpt"))) {

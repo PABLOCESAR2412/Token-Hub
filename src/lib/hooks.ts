@@ -398,6 +398,55 @@ export function useSendTestTelegramAlert() {
   });
 }
 
+export function useSyncTokenUsage() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (input: { tokenId: string; forceModel?: string }): Promise<{
+      ok: boolean;
+      snapshotsAdded: number;
+      totalCost: number;
+      message: string;
+    }> => {
+      const fns = await getServerFns();
+      return (await callServer(() => fns.syncTokenUsage({ data: input }))) as {
+        ok: boolean;
+        snapshotsAdded: number;
+        totalCost: number;
+        message: string;
+      };
+    },
+    onSuccess: (_data, vars) => {
+      qc.invalidateQueries({ queryKey: ["token", vars.tokenId] });
+      qc.invalidateQueries({ queryKey: ["tokens"] });
+      qc.invalidateQueries({ queryKey: ["snapshots", vars.tokenId] });
+      qc.invalidateQueries({ queryKey: ["audit"] });
+    },
+  });
+}
+
+export function useSyncAllTokensUsage() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (): Promise<{
+      ok: boolean;
+      updatedCount: number;
+      message: string;
+    }> => {
+      const fns = await getServerFns();
+      return (await callServer(() => fns.syncAllTokensUsage())) as {
+        ok: boolean;
+        updatedCount: number;
+        message: string;
+      };
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["tokens"] });
+      qc.invalidateQueries({ queryKey: ["audit"] });
+    },
+  });
+}
+
+
 
 
 

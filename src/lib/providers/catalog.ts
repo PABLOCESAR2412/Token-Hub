@@ -8,7 +8,7 @@ export const PROVIDER_CATALOG: ProviderInfo[] = [
   { slug: "openrouter", label: "OpenRouter", description: "Gateway multi-model (Claude, GPT, Llama y más)" },
   { slug: "openai", label: "OpenAI", description: "GPT-4o, o-series, embeddings" },
   { slug: "anthropic", label: "Anthropic Claude", description: "Claude Opus/Sonnet/Haiku" },
-  { slug: "google", label: "Google Gemini", description: "Gemini Pro/Flash/Lite" },
+  { slug: "google", label: "Google Gemini", description: "Gemini 4 Argon, 2.5 Pro, Flash, Thinking (1M tokens)" },
   { slug: "azure-openai", label: "Azure OpenAI", description: "OpenAI alojado en Microsoft Azure" },
   { slug: "aws-bedrock", label: "AWS Bedrock", description: "Claude, Titan y Llama vía AWS" },
   { slug: "nvidia", label: "NVIDIA NIM", description: "Inferencia de modelos en GPU NVIDIA" },

@@ -1,5 +1,5 @@
 import { createFileRoute, Link, useRouter } from "@tanstack/react-router";
-import { useToken, useTokens, useDeleteToken, useAddSnapshot, useUpdateToken, useTotpStatus, useSetTokenActive, useAuditLog, useSyncHistoricalUsage, useInspectToken } from "../../lib/hooks";
+import { useToken, useTokens, useDeleteToken, useAddSnapshot, useUpdateToken, useTotpStatus, useSetTokenActive, useAuditLog, useSyncHistoricalUsage, useInspectToken, useSyncTokenUsage } from "../../lib/hooks";
 import { RevealKey } from "../../components/RevealKey";
 import { LiveKeyInspector } from "../../components/LiveKeyInspector";
 import { CopyKeyButton } from "../../components/CopyKeyButton";
@@ -52,6 +52,18 @@ function TokenDetail() {
   const router = useRouter();
   const { dialog, open, close } = useConfirmDialog();
   const [isDeleting, setIsDeleting] = React.useState(false);
+  const syncUsos = useSyncTokenUsage();
+  const [syncSuccess, setSyncSuccess] = React.useState(false);
+
+  const handleSyncUsos = async () => {
+    try {
+      await syncUsos.mutateAsync({ tokenId });
+      setSyncSuccess(true);
+      setTimeout(() => setSyncSuccess(false), 3000);
+    } catch (err: any) {
+      alert("Error al actualizar usos: " + (err.message || err));
+    }
+  };
 
   const snapshots = Array.isArray(token?.snapshots) ? token.snapshots : [];
 
@@ -135,6 +147,21 @@ function TokenDetail() {
           </div>
         </div>
         <div className="flex items-center gap-2">
+          <button
+            onClick={handleSyncUsos}
+            disabled={syncUsos.isPending}
+            className="flex items-center gap-1.5 px-3 py-2 font-mono text-xs uppercase font-bold border border-electric/60 bg-electric/15 hover:bg-electric/25 text-electric transition-colors cursor-pointer disabled:opacity-50"
+            title="Sincronizar y actualizar registros de uso y modelos de este token"
+          >
+            <RefreshCw size={13} className={syncUsos.isPending ? "animate-spin" : ""} />
+            <span>
+              {syncUsos.isPending
+                ? "Actualizando usos..."
+                : syncSuccess
+                ? "Usos actualizados ✓"
+                : "Actualizar Usos"}
+            </span>
+          </button>
           <button
             onClick={() => setActive.mutate({ id: token.id, active: !token.active })}
             className={`flex items-center gap-2 px-3 py-2 font-mono text-xs uppercase font-bold transition-colors ${
@@ -331,18 +358,16 @@ function AnalyticsCard({
   tokenId: string;
   provider: string;
 }) {
-  const syncUsage = useSyncHistoricalUsage();
+  const syncUsage = useSyncTokenUsage();
   const [syncedMsg, setSyncedMsg] = React.useState<string | null>(null);
 
   const handleSync = async () => {
     try {
-      const res = await syncUsage.mutateAsync({ tokenId, days: 30 });
-      setSyncedMsg(
-        `¡Sincronizado! ${res.days} días generados (${res.totalTokens.toLocaleString()} tokens · $${res.totalCost.toFixed(2)})`
-      );
+      const res = await syncUsage.mutateAsync({ tokenId });
+      setSyncedMsg(res.message);
       setTimeout(() => setSyncedMsg(null), 5000);
     } catch (err: any) {
-      alert("Error al sincronizar consumo: " + (err.message || err));
+      alert("Error al actualizar usos: " + (err.message || err));
     }
   };
 
@@ -359,7 +384,7 @@ function AnalyticsCard({
           </div>
           <p className="font-mono text-xs text-bone/60 max-w-md mx-auto leading-relaxed">
             Las llamadas a través del Gateway Unificado (/api/v1/chat/completions) registran el consumo en tiempo real automáticamente.
-            Para visualizar de inmediato la actividad y consumo de los últimos 30 días de {provider} en este gráfico, puedes sincronizar el historial ahora mismo.
+            Para sincronizar y registrar de inmediato los consumos recientes de {provider} (incluyendo Gemini 4 Argon), presiona Actualizar Usos.
           </p>
           <div className="flex flex-col items-center gap-3 pt-2">
             <button
@@ -368,7 +393,7 @@ function AnalyticsCard({
               className="flex items-center gap-2 px-4 py-2.5 bg-electric hover:bg-electric/90 text-pure font-mono text-xs uppercase font-bold tracking-wider transition-colors disabled:opacity-50 cursor-pointer shadow-lg shadow-electric/20"
             >
               <RefreshCw className={`w-3.5 h-3.5 ${syncUsage.isPending ? "animate-spin" : ""}`} />
-              {syncUsage.isPending ? "Sincronizando 30 Días..." : "Sincronizar Consumo de los Últimos 30 Días"}
+              {syncUsage.isPending ? "Actualizando Usos..." : "Actualizar Usos"}
             </button>
             {syncedMsg && (
               <div className="font-mono text-xs text-emerald-400 border border-emerald-500/30 bg-emerald-950/30 px-3 py-1">
@@ -402,11 +427,11 @@ function AnalyticsCard({
           <button
             onClick={handleSync}
             disabled={syncUsage.isPending}
-            title="Sincronizar y actualizar últimos 30 días"
-            className="flex items-center gap-1.5 font-mono text-xs uppercase text-bone/70 hover:text-electric border border-bone/20 hover:border-electric px-3 py-1.5 transition-colors disabled:opacity-50 cursor-pointer"
+            title="Sincronizar y actualizar registros de uso"
+            className="flex items-center gap-1.5 font-mono text-xs uppercase text-electric border border-electric/40 bg-electric/10 hover:bg-electric/20 px-3 py-1.5 transition-colors disabled:opacity-50 cursor-pointer"
           >
             <RefreshCw className={`w-3 h-3 ${syncUsage.isPending ? "animate-spin" : ""}`} />
-            <span>{syncUsage.isPending ? "Sincronizando..." : "Sincronizar 30 Días"}</span>
+            <span>{syncUsage.isPending ? "Actualizando..." : "Actualizar Usos"}</span>
           </button>
         </div>
       </div>
@@ -487,6 +512,11 @@ function ModelBreakdownCard({
                 <td className="px-3 py-2.5 flex items-center gap-2">
                   <span className={"w-2 h-2 inline-block " + palette[i % palette.length]} />
                   <span className="font-mono text-xs">{m.model}</span>
+                  {m.model.toLowerCase().includes("argon") && (
+                    <span className="px-1.5 py-0.5 text-[9px] font-mono uppercase bg-electric/20 text-electric border border-electric/40 font-bold shrink-0">
+                      Argon 4 // Frontier
+                    </span>
+                  )}
                 </td>
                 <td className="px-3 py-2.5 font-mono text-sm text-right">{m.tokensUsed.toLocaleString()}</td>
                 <td className="px-3 py-2.5 font-mono text-xs text-bone/50 text-right">

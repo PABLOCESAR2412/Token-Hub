@@ -8,13 +8,13 @@ import {
   type SortingState,
 } from "@tanstack/react-table";
 import * as React from "react";
-import { useTokens, useDeleteToken, useSetTokenActive } from "../lib/hooks";
+import { useTokens, useDeleteToken, useSetTokenActive, useSyncAllTokensUsage } from "../lib/hooks";
 import type { Token } from "../lib/types";
 import { ConfirmDialog, useConfirmDialog } from "../components/ConfirmDialog";
 import { TotpSetup } from "../components/TotpSetup";
 import { CopyKeyButton } from "../components/CopyKeyButton";
 import { McpConnectorDialog } from "../components/McpConnectorDialog";
-import { Trash2, Eye, Pause, Play, Download, Search, Server } from "lucide-react";
+import { Trash2, Eye, Pause, Play, Download, Search, Server, RefreshCw } from "lucide-react";
 
 export const Route = createFileRoute("/")({
   component: Dashboard,
@@ -32,6 +32,18 @@ function Dashboard() {
   const [pendingDelete, setPendingDelete] = React.useState<Token | null>(null);
   const [showMcp, setShowMcp] = React.useState(false);
   const { dialog, open, close } = useConfirmDialog();
+  const syncAllUsos = useSyncAllTokensUsage();
+  const [syncAllSuccess, setSyncAllSuccess] = React.useState(false);
+
+  const handleSyncAllUsos = async () => {
+    try {
+      await syncAllUsos.mutateAsync();
+      setSyncAllSuccess(true);
+      setTimeout(() => setSyncAllSuccess(false), 3000);
+    } catch (err: any) {
+      alert("Error al actualizar usos: " + (err.message || err));
+    }
+  };
 
   const providers = React.useMemo(() => {
     const set = new Set(tokens.map((t) => t.provider));
@@ -313,6 +325,15 @@ function Dashboard() {
               </option>
             ))}
           </select>
+          <button
+            onClick={handleSyncAllUsos}
+            disabled={syncAllUsos.isPending}
+            className="flex items-center gap-1.5 border border-bone/20 hover:border-electric px-3 py-2 font-mono text-sm uppercase text-bone/70 hover:text-electric transition-colors cursor-pointer disabled:opacity-50"
+            title="Sincronizar y actualizar usos de todos los tokens"
+          >
+            <RefreshCw size={14} className={syncAllUsos.isPending ? "animate-spin text-electric" : "text-electric"} />
+            <span>{syncAllUsos.isPending ? "Actualizando..." : syncAllSuccess ? "Usos OK ✓" : "Actualizar Usos"}</span>
+          </button>
           <button
             onClick={exportCsv}
             className="flex items-center gap-2 border border-bone/20 px-3 py-2 font-mono text-sm uppercase text-bone/70 hover:text-electric hover:border-electric/40 transition-colors"

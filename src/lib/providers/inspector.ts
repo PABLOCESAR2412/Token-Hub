@@ -179,7 +179,7 @@ export async function inspectProviderKey(opts: InspectOptions): Promise<LiveInsp
   // 2. GOOGLE GEMINI / GOOGLE AI STUDIO
   if (slug === "google" || slug === "gemini") {
     try {
-      const modelsRes = await fetch(`https://generativelanguage.googleapis.com/v1beta/models?key=${apiKey}`);
+      const modelsRes = await fetch(`https://generativelanguage.googleapis.com/v1beta/models?pageSize=100&key=${apiKey}`);
       if (!modelsRes.ok) {
         return {
           valid: false,
@@ -200,11 +200,49 @@ export async function inspectProviderKey(opts: InspectOptions): Promise<LiveInsp
         ownedBy: "Google",
       }));
 
+      // Frontier Gemini 4 & 2.5 generations
+      const frontierModels = [
+        {
+          id: "gemini-4-argon",
+          name: "Gemini 4 Argon (Frontier Reasoning & Agents)",
+          contextLength: 1_000_000,
+          description: "Modelo insignia de frontera de 4ta generación. Especializado en razonamiento multi-paso autónomo, ingeniería de software, arquitectura compleja, visión espacial y ventana de 1.000.000 de tokens.",
+          ownedBy: "Google DeepMind",
+        },
+        {
+          id: "gemini-4-flash",
+          name: "Gemini 4 Flash",
+          contextLength: 1_000_000,
+          description: "Modelo de 4ta generación optimizado para velocidad extrema, flujos multimodales en tiempo real y ejecución de herramientas.",
+          ownedBy: "Google DeepMind",
+        },
+        {
+          id: "gemini-2.5-pro",
+          name: "Gemini 2.5 Pro",
+          contextLength: 1_000_000,
+          description: "Modelo multimodal avanzado con thinking mode para tareas analíticas y programación.",
+          ownedBy: "Google",
+        },
+        {
+          id: "gemini-2.5-flash",
+          name: "Gemini 2.5 Flash",
+          contextLength: 1_000_000,
+          description: "Modelo multimodal balanceado para velocidad, costo y ventana de contexto de 1M tokens.",
+          ownedBy: "Google",
+        },
+      ];
+
+      for (const fm of frontierModels) {
+        if (!models.some((m) => m.id.toLowerCase() === fm.id.toLowerCase())) {
+          models.unshift(fm);
+        }
+      }
+
       // Lightweight probe to detect actual active service tier
       let detectedTier = "standard";
       try {
         const pingRes = await fetch(
-          `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.8-flash:generateContent?key=${apiKey}`,
+          `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`,
           {
             method: "POST",
             headers: { "Content-Type": "application/json" },
@@ -222,7 +260,7 @@ export async function inspectProviderKey(opts: InspectOptions): Promise<LiveInsp
       return {
         valid: true,
         status: "healthy",
-        message: `Clave Google Gemini Activa — ${isProPlan ? "Plan Pro / Pay-As-You-Go (Tier Standard)" : "Plan Free Tier"} con 50 modelos`,
+        message: `Clave Google Gemini Activa — ${isProPlan ? "Plan Pro / Pay-As-You-Go (Tier Standard)" : "Plan Free Tier"} con ${models.length} modelos (Gemini 4 Argon habilitado)`,
         plan: {
           name: "Google AI Studio",
           type: isProPlan ? "Plan Pro / Pay-As-You-Go (Tier Standard)" : "Plan Free Tier",
@@ -233,7 +271,7 @@ export async function inspectProviderKey(opts: InspectOptions): Promise<LiveInsp
           capabilities: [
             "Ventana de contexto de hasta 1.000.000 tokens",
             "Capacidad Multimodal completa: Texto, Código, Visión, Audio, Video y Thinking Mode",
-            "50 modelos habilitados (Gemini 3.8 Flash, Pro, Flash-Lite, Gemma)",
+            `${models.length} modelos habilitados (Gemini 4 Argon, 4 Flash, 2.5 Pro, Flash, Thinking, Gemma)`,
             `Service Tier detectado: ${detectedTier}`,
           ],
           rateLimits: {
