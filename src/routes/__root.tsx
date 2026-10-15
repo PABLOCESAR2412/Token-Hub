@@ -12,7 +12,8 @@ import { ChangePasswordScreen } from "../components/ChangePasswordScreen";
 import { useSession } from "../lib/use-session";
 import { ChangePasswordDialog } from "../components/ChangePasswordDialog";
 import { TelegramSettingsDialog } from "../components/TelegramSettingsDialog";
-import { Bell } from "lucide-react";
+import { McpConnectorDialog } from "../components/McpConnectorDialog";
+import { Bell, Server } from "lucide-react";
 import "../global.css";
 
 const isProduction = process.env.APP_MODE === "production";
@@ -166,9 +167,19 @@ function HeaderActions() {
   const { logout, authed, mustChangePassword } = useSession();
   const [showPassword, setShowPassword] = React.useState(false);
   const [showTelegram, setShowTelegram] = React.useState(false);
+  const [showMcp, setShowMcp] = React.useState(false);
   if (!authed || mustChangePassword) return <LogoutButton />;
   return (
     <>
+      <button
+        onClick={() => setShowMcp(true)}
+        className="flex items-center gap-1.5 border border-bone/20 px-2 py-1 text-bone/60 hover:text-electric hover:border-electric/40 transition-colors"
+        title="Conectar Baúl mediante MCP a Cursor, Windsurf, Claude o Agentes"
+      >
+        <Server size={12} className="text-electric" />
+        <span>CONECTOR MCP</span>
+      </button>
+      {showMcp && <McpConnectorDialog onClose={() => setShowMcp(false)} />}
       <button
         onClick={() => setShowTelegram(true)}
         className="flex items-center gap-1.5 border border-bone/20 px-2 py-1 text-bone/60 hover:text-electric hover:border-electric/40 transition-colors"

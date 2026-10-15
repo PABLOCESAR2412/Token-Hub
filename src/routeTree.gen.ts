@@ -10,6 +10,7 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as ApiMcpRouteImport } from './routes/api/mcp'
 import { Route as TokenTokenIdRouteImport } from './routes/token/$tokenId'
 import { Route as TokenNewRouteImport } from './routes/token/new'
 import { Route as ApiAuthChangePasswordRouteImport } from './routes/api/auth/change-password'
@@ -18,12 +19,19 @@ import { Route as ApiAuthLoginRouteImport } from './routes/api/auth/login'
 import { Route as ApiAuthLogoutRouteImport } from './routes/api/auth/logout'
 import { Route as ApiAuthSessionRouteImport } from './routes/api/auth/session'
 import { Route as ApiCronPollUsageRouteImport } from './routes/api/cron/poll-usage'
+import { Route as ApiMcpMessageRouteImport } from './routes/api/mcp/message'
+import { Route as ApiMcpSseRouteImport } from './routes/api/mcp/sse'
 import { Route as ApiV1ModelsRouteImport } from './routes/api/v1/models'
 import { Route as ApiV1ChatCompletionsRouteImport } from './routes/api/v1/chat/completions'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiMcpRoute = ApiMcpRouteImport.update({
+  id: '/api/mcp',
+  path: '/api/mcp',
   getParentRoute: () => rootRouteImport,
 } as any)
 const TokenTokenIdRoute = TokenTokenIdRouteImport.update({
@@ -66,6 +74,16 @@ const ApiCronPollUsageRoute = ApiCronPollUsageRouteImport.update({
   path: '/api/cron/poll-usage',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiMcpMessageRoute = ApiMcpMessageRouteImport.update({
+  id: '/message',
+  path: '/message',
+  getParentRoute: () => ApiMcpRoute,
+} as any)
+const ApiMcpSseRoute = ApiMcpSseRouteImport.update({
+  id: '/sse',
+  path: '/sse',
+  getParentRoute: () => ApiMcpRoute,
+} as any)
 const ApiV1ModelsRoute = ApiV1ModelsRouteImport.update({
   id: '/api/v1/models',
   path: '/api/v1/models',
@@ -79,6 +97,7 @@ const ApiV1ChatCompletionsRoute = ApiV1ChatCompletionsRouteImport.update({
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/api/mcp': typeof ApiMcpRouteWithChildren
   '/token/$tokenId': typeof TokenTokenIdRoute
   '/token/new': typeof TokenNewRoute
   '/api/auth/change-password': typeof ApiAuthChangePasswordRoute
@@ -87,11 +106,14 @@ export interface FileRoutesByFullPath {
   '/api/auth/logout': typeof ApiAuthLogoutRoute
   '/api/auth/session': typeof ApiAuthSessionRoute
   '/api/cron/poll-usage': typeof ApiCronPollUsageRoute
+  '/api/mcp/message': typeof ApiMcpMessageRoute
+  '/api/mcp/sse': typeof ApiMcpSseRoute
   '/api/v1/models': typeof ApiV1ModelsRoute
   '/api/v1/chat/completions': typeof ApiV1ChatCompletionsRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/api/mcp': typeof ApiMcpRouteWithChildren
   '/token/$tokenId': typeof TokenTokenIdRoute
   '/token/new': typeof TokenNewRoute
   '/api/auth/change-password': typeof ApiAuthChangePasswordRoute
@@ -100,12 +122,15 @@ export interface FileRoutesByTo {
   '/api/auth/logout': typeof ApiAuthLogoutRoute
   '/api/auth/session': typeof ApiAuthSessionRoute
   '/api/cron/poll-usage': typeof ApiCronPollUsageRoute
+  '/api/mcp/message': typeof ApiMcpMessageRoute
+  '/api/mcp/sse': typeof ApiMcpSseRoute
   '/api/v1/models': typeof ApiV1ModelsRoute
   '/api/v1/chat/completions': typeof ApiV1ChatCompletionsRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/api/mcp': typeof ApiMcpRouteWithChildren
   '/token/$tokenId': typeof TokenTokenIdRoute
   '/token/new': typeof TokenNewRoute
   '/api/auth/change-password': typeof ApiAuthChangePasswordRoute
@@ -114,6 +139,8 @@ export interface FileRoutesById {
   '/api/auth/logout': typeof ApiAuthLogoutRoute
   '/api/auth/session': typeof ApiAuthSessionRoute
   '/api/cron/poll-usage': typeof ApiCronPollUsageRoute
+  '/api/mcp/message': typeof ApiMcpMessageRoute
+  '/api/mcp/sse': typeof ApiMcpSseRoute
   '/api/v1/models': typeof ApiV1ModelsRoute
   '/api/v1/chat/completions': typeof ApiV1ChatCompletionsRoute
 }
@@ -121,6 +148,7 @@ export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
     | '/'
+    | '/api/mcp'
     | '/token/$tokenId'
     | '/token/new'
     | '/api/auth/change-password'
@@ -129,11 +157,14 @@ export interface FileRouteTypes {
     | '/api/auth/logout'
     | '/api/auth/session'
     | '/api/cron/poll-usage'
+    | '/api/mcp/message'
+    | '/api/mcp/sse'
     | '/api/v1/models'
     | '/api/v1/chat/completions'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
+    | '/api/mcp'
     | '/token/$tokenId'
     | '/token/new'
     | '/api/auth/change-password'
@@ -142,11 +173,14 @@ export interface FileRouteTypes {
     | '/api/auth/logout'
     | '/api/auth/session'
     | '/api/cron/poll-usage'
+    | '/api/mcp/message'
+    | '/api/mcp/sse'
     | '/api/v1/models'
     | '/api/v1/chat/completions'
   id:
     | '__root__'
     | '/'
+    | '/api/mcp'
     | '/token/$tokenId'
     | '/token/new'
     | '/api/auth/change-password'
@@ -155,12 +189,15 @@ export interface FileRouteTypes {
     | '/api/auth/logout'
     | '/api/auth/session'
     | '/api/cron/poll-usage'
+    | '/api/mcp/message'
+    | '/api/mcp/sse'
     | '/api/v1/models'
     | '/api/v1/chat/completions'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  ApiMcpRoute: typeof ApiMcpRouteWithChildren
   TokenTokenIdRoute: typeof TokenTokenIdRoute
   TokenNewRoute: typeof TokenNewRoute
   ApiAuthChangePasswordRoute: typeof ApiAuthChangePasswordRoute
@@ -180,6 +217,13 @@ declare module '@tanstack/react-router' {
       path: '/'
       fullPath: '/'
       preLoaderRoute: typeof IndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/mcp': {
+      id: '/api/mcp'
+      path: '/api/mcp'
+      fullPath: '/api/mcp'
+      preLoaderRoute: typeof ApiMcpRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/token/$tokenId': {
@@ -238,6 +282,20 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiCronPollUsageRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/mcp/message': {
+      id: '/api/mcp/message'
+      path: '/message'
+      fullPath: '/api/mcp/message'
+      preLoaderRoute: typeof ApiMcpMessageRouteImport
+      parentRoute: typeof ApiMcpRoute
+    }
+    '/api/mcp/sse': {
+      id: '/api/mcp/sse'
+      path: '/sse'
+      fullPath: '/api/mcp/sse'
+      preLoaderRoute: typeof ApiMcpSseRouteImport
+      parentRoute: typeof ApiMcpRoute
+    }
     '/api/v1/models': {
       id: '/api/v1/models'
       path: '/api/v1/models'
@@ -255,8 +313,22 @@ declare module '@tanstack/react-router' {
   }
 }
 
+interface ApiMcpRouteChildren {
+  ApiMcpMessageRoute: typeof ApiMcpMessageRoute
+  ApiMcpSseRoute: typeof ApiMcpSseRoute
+}
+
+const ApiMcpRouteChildren: ApiMcpRouteChildren = {
+  ApiMcpMessageRoute: ApiMcpMessageRoute,
+  ApiMcpSseRoute: ApiMcpSseRoute,
+}
+
+const ApiMcpRouteWithChildren =
+  ApiMcpRoute._addFileChildren(ApiMcpRouteChildren)
+
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  ApiMcpRoute: ApiMcpRouteWithChildren,
   TokenTokenIdRoute: TokenTokenIdRoute,
   TokenNewRoute: TokenNewRoute,
   ApiAuthChangePasswordRoute: ApiAuthChangePasswordRoute,

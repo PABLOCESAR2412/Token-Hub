@@ -13,7 +13,8 @@ import type { Token } from "../lib/types";
 import { ConfirmDialog, useConfirmDialog } from "../components/ConfirmDialog";
 import { TotpSetup } from "../components/TotpSetup";
 import { CopyKeyButton } from "../components/CopyKeyButton";
-import { Trash2, Eye, Pause, Play, Download, Search } from "lucide-react";
+import { McpConnectorDialog } from "../components/McpConnectorDialog";
+import { Trash2, Eye, Pause, Play, Download, Search, Server } from "lucide-react";
 
 export const Route = createFileRoute("/")({
   component: Dashboard,
@@ -29,6 +30,7 @@ function Dashboard() {
   const [tagFilter, setTagFilter] = React.useState("all");
   const [search, setSearch] = React.useState("");
   const [pendingDelete, setPendingDelete] = React.useState<Token | null>(null);
+  const [showMcp, setShowMcp] = React.useState(false);
   const { dialog, open, close } = useConfirmDialog();
 
   const providers = React.useMemo(() => {
@@ -318,6 +320,14 @@ function Dashboard() {
             <Download size={14} />
             CSV
           </button>
+          <button
+            onClick={() => setShowMcp(true)}
+            className="flex items-center gap-1.5 border border-bone/20 hover:border-electric px-3 py-2 font-mono text-sm uppercase text-bone/70 hover:text-electric transition-colors cursor-pointer"
+            title="Conectar Baúl mediante MCP"
+          >
+            <Server size={14} className="text-electric" />
+            <span>MCP</span>
+          </button>
           <Link
             to="/token/new"
             className="bg-electric text-bone px-4 py-2 font-mono text-sm uppercase font-bold hover:opacity-90 transition-colors"
@@ -394,6 +404,7 @@ function Dashboard() {
           close();
         }}
       />
+      {showMcp && <McpConnectorDialog onClose={() => setShowMcp(false)} />}
 
       <div className="bg-pure/40 border border-bone/20 p-5">
         <TotpSetup />
