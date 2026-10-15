@@ -1,4 +1,5 @@
 import * as React from "react";
+import { createPortal } from "react-dom";
 import { Send, CheckCircle2, AlertTriangle, X, Shield, Bell, HelpCircle } from "lucide-react";
 import { useTelegramSettings, useSaveTelegramSettings, useSendTestTelegramAlert } from "../lib/hooks";
 import type { TelegramSettings } from "../lib/types";
@@ -62,9 +63,37 @@ export function TelegramSettingsDialog({ onClose }: TelegramSettingsDialogProps)
   const inputClass =
     "w-full bg-pure border border-bone/20 focus:border-electric outline-none px-3 py-2 text-sm font-mono placeholder:text-bone/30 transition-colors";
 
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-pure/80 backdrop-blur-sm animate-fade-in">
-      <div className="bg-stone border border-bone/20 p-6 sm:p-8 max-w-lg w-full shadow-2xl relative space-y-6 max-h-[90vh] overflow-y-auto">
+  const [mounted, setMounted] = React.useState(false);
+
+  React.useEffect(() => {
+    setMounted(true);
+    const prevOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onClose();
+    };
+    window.addEventListener("keydown", handleKeyDown);
+
+    return () => {
+      document.body.style.overflow = prevOverflow;
+      window.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [onClose]);
+
+  if (!mounted || typeof document === "undefined") {
+    return null;
+  }
+
+  return createPortal(
+    <div
+      className="fixed inset-0 z-[9999] flex items-center justify-center p-4 sm:p-6 bg-pure/85 backdrop-blur-md animate-fade-in"
+      onClick={onClose}
+    >
+      <div
+        className="bg-stone border border-bone/20 p-6 sm:p-8 max-w-lg w-full shadow-2xl relative space-y-6 max-h-[85vh] overflow-y-auto"
+        onClick={(e) => e.stopPropagation()}
+      >
         <button
           onClick={onClose}
           className="absolute top-5 right-5 text-bone/40 hover:text-bone transition-colors"
@@ -239,6 +268,7 @@ export function TelegramSettingsDialog({ onClose }: TelegramSettingsDialogProps)
           </div>
         </form>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }

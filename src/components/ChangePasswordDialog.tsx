@@ -1,4 +1,5 @@
 import * as React from "react";
+import { createPortal } from "react-dom";
 import { useSession } from "../lib/use-session";
 import { X } from "lucide-react";
 
@@ -43,9 +44,31 @@ export function ChangePasswordDialog({ onClose }: { onClose: () => void }) {
   const inputClass =
     "w-full bg-pure border border-bone/20 focus:border-electric outline-none px-3 py-2 text-sm font-mono placeholder:text-bone/30 transition-colors";
 
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 px-6" onClick={onClose}>
-      <div className="w-full max-w-sm bg-stone border border-bone/20 p-6 space-y-4" onClick={(e) => e.stopPropagation()}>
+  const [mounted, setMounted] = React.useState(false);
+
+  React.useEffect(() => {
+    setMounted(true);
+    const prevOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onClose();
+    };
+    window.addEventListener("keydown", handleKeyDown);
+
+    return () => {
+      document.body.style.overflow = prevOverflow;
+      window.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [onClose]);
+
+  if (!mounted || typeof document === "undefined") {
+    return null;
+  }
+
+  return createPortal(
+    <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/75 backdrop-blur-md px-6 animate-fade-in" onClick={onClose}>
+      <div className="w-full max-w-sm bg-stone border border-bone/20 p-6 space-y-4 shadow-2xl relative" onClick={(e) => e.stopPropagation()}>
         <div className="flex items-center justify-between">
           <div className="font-mono text-xs uppercase text-electric">[ SEGURIDAD // CAMBIAR PASS ]</div>
           <button onClick={onClose} className="text-bone/40 hover:text-red-400 transition-colors">
@@ -104,6 +127,7 @@ export function ChangePasswordDialog({ onClose }: { onClose: () => void }) {
           </button>
         </form>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }
