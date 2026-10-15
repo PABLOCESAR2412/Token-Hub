@@ -14,6 +14,7 @@ import type * as crons from "../crons.js";
 import type * as cronsJob from "../cronsJob.js";
 import type * as migration from "../migration.js";
 import type * as seed from "../seed.js";
+import type * as settings from "../settings.js";
 import type * as snapshots from "../snapshots.js";
 import type * as tokens from "../tokens.js";
 
@@ -30,6 +31,7 @@ declare const fullApi: ApiFromModules<{
   cronsJob: typeof cronsJob;
   migration: typeof migration;
   seed: typeof seed;
+  settings: typeof settings;
   snapshots: typeof snapshots;
   tokens: typeof tokens;
 }>;
