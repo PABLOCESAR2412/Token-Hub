@@ -1,5 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { resolveUpstreamTarget, forwardChatRequest } from "../../../../lib/proxy/engine";
+import { resolveUpstreamTarget, forwardChatRequest, extractCallerInfo } from "../../../../lib/proxy/engine";
 
 export const Route = createFileRoute("/api/v1/chat/completions")({
   server: {
@@ -23,8 +23,9 @@ export const Route = createFileRoute("/api/v1/chat/completions")({
 
           const modelRequested = body.model || "default";
           const target = await resolveUpstreamTarget(authHeader, modelRequested);
+          const callerInfo = extractCallerInfo(request);
 
-          return await forwardChatRequest(target, body);
+          return await forwardChatRequest(target, body, callerInfo);
         } catch (err: any) {
           return Response.json(
             {

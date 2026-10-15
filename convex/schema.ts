@@ -49,6 +49,8 @@ export default defineSchema({
     latencyMs: v.optional(v.union(v.number(), v.null())),
     tokensPerSecond: v.optional(v.union(v.number(), v.null())),
     provider: v.optional(v.union(v.string(), v.null())),
+    caller: v.optional(v.union(v.string(), v.null())),
+    endpoint: v.optional(v.union(v.string(), v.null())),
     timestamp: v.string(),
   }).index("by_tokenId", ["tokenId"]),
 

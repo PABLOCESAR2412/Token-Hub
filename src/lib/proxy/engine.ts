@@ -175,13 +175,70 @@ export async function resolveUpstreamTarget(
   };
 }
 
+export function extractCallerInfo(request: Request): { caller: string; endpoint: string } {
+  const h = request.headers;
+
+  // 1. Check explicit headers (X-Client-App, X-App-Name, X-System, X-Caller, etc.)
+  const explicit =
+    h.get("x-client-app") ||
+    h.get("x-app-name") ||
+    h.get("x-application-name") ||
+    h.get("x-client-name") ||
+    h.get("x-caller") ||
+    h.get("x-system");
+  if (explicit && explicit.trim()) {
+    return { caller: explicit.trim(), endpoint: "/api/v1/chat/completions" };
+  }
+
+  // 2. Check Referer or Origin
+  const referer = h.get("referer");
+  if (referer) {
+    try {
+      const u = new URL(referer);
+      return { caller: `Web (${u.host})`, endpoint: "/api/v1/chat/completions" };
+    } catch {
+      return { caller: `Web (${referer.slice(0, 30)})`, endpoint: "/api/v1/chat/completions" };
+    }
+  }
+  const origin = h.get("origin");
+  if (origin) {
+    try {
+      const u = new URL(origin);
+      return { caller: `Web (${u.host})`, endpoint: "/api/v1/chat/completions" };
+    } catch {
+      return { caller: `Web (${origin.slice(0, 30)})`, endpoint: "/api/v1/chat/completions" };
+    }
+  }
+
+  // 3. Check User-Agent
+  const ua = h.get("user-agent") || "";
+  const uaLower = ua.toLowerCase();
+  if (uaLower.includes("cursor")) return { caller: "Cursor IDE", endpoint: "/api/v1/chat/completions" };
+  if (uaLower.includes("claude-code") || uaLower.includes("claude_code")) return { caller: "Claude Code CLI", endpoint: "/api/v1/chat/completions" };
+  if (uaLower.includes("windsurf") || uaLower.includes("codeium")) return { caller: "Windsurf IDE", endpoint: "/api/v1/chat/completions" };
+  if (uaLower.includes("librechat")) return { caller: "LibreChat", endpoint: "/api/v1/chat/completions" };
+  if (uaLower.includes("open-webui") || uaLower.includes("openwebui")) return { caller: "OpenWebUI", endpoint: "/api/v1/chat/completions" };
+  if (uaLower.includes("python") || uaLower.includes("requests") || uaLower.includes("urllib")) return { caller: "Python SDK / Script", endpoint: "/api/v1/chat/completions" };
+  if (uaLower.includes("node") || uaLower.includes("axios") || uaLower.includes("undici")) return { caller: "Node.js Service", endpoint: "/api/v1/chat/completions" };
+  if (uaLower.includes("curl")) return { caller: "cURL / Terminal", endpoint: "/api/v1/chat/completions" };
+  if (uaLower.includes("postman")) return { caller: "Postman", endpoint: "/api/v1/chat/completions" };
+  if (uaLower.includes("mozilla") || uaLower.includes("chrome") || uaLower.includes("safari")) return { caller: "Navegador Web", endpoint: "/api/v1/chat/completions" };
+
+  if (ua.trim()) {
+    return { caller: ua.slice(0, 30), endpoint: "/api/v1/chat/completions" };
+  }
+
+  return { caller: "Cliente API General", endpoint: "/api/v1/chat/completions" };
+}
+
 /**
  * Forwards request to upstream provider, handles streaming/non-streaming,
  * and atomically logs token usage into Convex.
  */
 export async function forwardChatRequest(
   target: UpstreamTarget,
-  body: ProxyChatRequest
+  body: ProxyChatRequest,
+  callerInfo?: { caller?: string | null; endpoint?: string | null }
 ): Promise<Response> {
   const payload = {
     ...body,
@@ -244,6 +301,8 @@ export async function forwardChatRequest(
       inputTokens: promptTokens,
       outputTokens: completionTokens,
       provider: target.token.provider,
+      caller: callerInfo?.caller || "Cliente API",
+      endpoint: callerInfo?.endpoint || "/api/v1/chat/completions",
     });
 
     // Update total cost on token

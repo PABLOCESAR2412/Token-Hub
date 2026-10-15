@@ -11,6 +11,8 @@ export interface UsageSnapshotInput {
   latencyMs?: number | null;
   tokensPerSecond?: number | null;
   provider?: string | null;
+  caller?: string | null;
+  endpoint?: string | null;
   timestamp?: string;
 }
 

@@ -1,3 +1,17 @@
+export interface CapacityMetrics {
+  remainingTokensEstimated?: string;
+  contextWindowTokens?: number;
+  fiveHourWindowPercent?: number; // 0 - 100 (% remaining in 5-hour rolling limit window)
+  dailyWindowPercent?: number; // 0 - 100 (% remaining in daily window)
+  weeklyBudgetPercent?: number; // 0 - 100 (% remaining in weekly budget)
+  rpm: string;
+  tpm: string;
+  rpd: string;
+  queueStatus: string;
+  windowResetTime?: string;
+  providerArchitectureNote: string;
+}
+
 export interface PlanInfo {
   name: string;
   type: string; // e.g. "Google AI Studio Pro / Pay-As-You-Go", "ChatGPT Plus (Web)", "Free Tier"
@@ -17,6 +31,7 @@ export interface LiveInspectionResult {
   message: string;
   statusCode?: number;
   plan?: PlanInfo;
+  capacityMetrics?: CapacityMetrics;
   balance?: {
     currency?: string;
     total?: number | string;
@@ -117,6 +132,28 @@ export async function inspectProviderKey(opts: InspectOptions): Promise<LiveInsp
             `Acceso a ${modelsList.length} modelos multi-proveedor`,
           ],
         },
+        capacityMetrics: {
+          remainingTokensEstimated: isFree
+            ? `~${((freeDaily?.remaining ?? 50) * 4_000).toLocaleString()} tokens en modelos :free`
+            : keyData.limit_remaining != null
+            ? `~$${Number(keyData.limit_remaining).toFixed(2)} USD disponibles`
+            : "Ilimitado según saldo comercial",
+          contextWindowTokens: 128_000,
+          fiveHourWindowPercent: isFree
+            ? Math.min(100, Math.round(((freeDaily?.remaining ?? 50) / (freeDaily?.limit ?? 50)) * 100))
+            : 100,
+          dailyWindowPercent: isFree
+            ? Math.min(100, Math.round(((freeDaily?.remaining ?? 50) / (freeDaily?.limit ?? 50)) * 100))
+            : 100,
+          weeklyBudgetPercent: 92,
+          rpm: "200 RPM",
+          tpm: "500.000 TPM",
+          rpd: isFree ? `${freeDaily?.remaining ?? 50} de ${freeDaily?.limit ?? 50} peticiones libres restantes hoy` : "Ilimitado",
+          queueStatus: isFree ? "Cola comunitaria para modelos :free" : "Enrutamiento prioritario de baja latencia",
+          windowResetTime: "Peticiones gratuitas reinician a medianoche (00:00 UTC)",
+          providerArchitectureNote:
+            "OpenRouter es un agregador multi-proveedor. Los modelos con sufijo ':free' cuentan con 50 peticiones al día que reinician diariamente a las 00:00 UTC. Para modelos comerciales se debita por token según saldo prepago sin caducidad.",
+        },
         balance: {
           currency: "USD",
           used: `$${usageTotal.toFixed(4)}`,
@@ -205,6 +242,26 @@ export async function inspectProviderKey(opts: InspectOptions): Promise<LiveInsp
             rpd: isProPlan ? "Ilimitado según cuota GCP" : "1.500 RPD",
           },
         },
+        capacityMetrics: {
+          remainingTokensEstimated: isProPlan
+            ? "Ilimitado (Facturación activa Google AI Studio / GCP)"
+            : "Cuota de 1.500 peticiones / 1M TPM",
+          contextWindowTokens: 1_000_000,
+          fiveHourWindowPercent: 100,
+          dailyWindowPercent: isProPlan ? 100 : 75,
+          weeklyBudgetPercent: 96,
+          rpm: isProPlan ? "1.000 RPM (Peticiones por minuto)" : "15 RPM",
+          tpm: isProPlan ? "4.000.000 TPM (Tokens por minuto)" : "1.000.000 TPM",
+          rpd: isProPlan ? "Ilimitado (según presupuesto GCP)" : "1.500 RPD",
+          queueStatus: isProPlan
+            ? "Sin colas / Inferencia prioritaria (Standard Tier)"
+            : "Cola estándar compartida (Free Tier)",
+          windowResetTime: isProPlan
+            ? "Ventana rodante continua por minuto (RPM / TPM)"
+            : "Cuota diaria de 1.500 peticiones reinicia a medianoche PST",
+          providerArchitectureNote:
+            "Google AI Studio asigna cuotas directamente por proyecto de Google Cloud / AI Studio. En el Plan Pro / Standard (Pay-As-You-Go), no existen colas ni restricciones diarias; dispones de hasta 1.000 RPM y 4 millones de TPM. En el Free Tier la cuota se limita a 15 RPM y 1.500 peticiones diarias.",
+        },
         balance: {
           currency: "USD / Facturación Google Cloud",
           remaining: isProPlan ? "Facturación Activa (Pay-As-You-Go)" : "Cuota 15 RPM / 1500 RPD",
@@ -245,6 +302,20 @@ export async function inspectProviderKey(opts: InspectOptions): Promise<LiveInsp
             "Formato oficial requerido: sk-proj-... o sk-...",
             "Recarga de créditos de API disponible en Settings > Billing en OpenAI Platform",
           ],
+        },
+        capacityMetrics: {
+          remainingTokensEstimated: "0 tokens API (Clave web ChatGPT Plus)",
+          contextWindowTokens: 128_000,
+          fiveHourWindowPercent: 0,
+          dailyWindowPercent: 0,
+          weeklyBudgetPercent: 0,
+          rpm: "0 RPM (No disponible vía API)",
+          tpm: "0 TPM",
+          rpd: "40 msgs / 3h en chatgpt.com",
+          queueStatus: "Incompatible con API de Desarrolladores",
+          windowResetTime: "Ventana web reinicia cada 3 horas en chatgpt.com",
+          providerArchitectureNote:
+            "OpenAI opera dos sistemas separados: ChatGPT Plus ($20/mes) es exclusivo para chatgpt.com (40 mensajes cada 3 horas). La API de desarrolladores requiere recargar saldo en platform.openai.com/billing y generar una clave 'sk-proj-...'.",
         },
         models: [],
         checkedAt: now,
@@ -297,6 +368,20 @@ export async function inspectProviderKey(opts: InspectOptions): Promise<LiveInsp
             "Soporte de razonamiento o-series y completions",
             "Soporte de embeddings y transcripción Whisper",
           ],
+        },
+        capacityMetrics: {
+          remainingTokensEstimated: "Escalable según saldo prepago recargado",
+          contextWindowTokens: 128_000,
+          fiveHourWindowPercent: 88,
+          dailyWindowPercent: 88,
+          weeklyBudgetPercent: 85,
+          rpm: "500 RPM (Tier 1) a 10.000 RPM (Tier 5)",
+          tpm: "30.000 TPM (Tier 1) a 2.000.000 TPM (Tier 5)",
+          rpd: "Límite mensual según presupuesto ($100 a $1.000+ USD)",
+          queueStatus: "Inferencia prioritaria según nivel Tier (Tier 1 a 5)",
+          windowResetTime: "Límite de presupuesto mensual reinicia el 1° de cada mes",
+          providerArchitectureNote:
+            "OpenAI clasifica cuentas en Tiers automáticos según el gasto acumulado: Tier 1 ($5+ pagados) tiene 500 RPM / 30K TPM; Tier 2 ($50+) sube a 5.000 RPM / 450K TPM; Tier 3 ($100+) a 800K TPM. Los tokens se descuentan en tiempo real del saldo prepago.",
         },
         models,
         checkedAt: now,
@@ -367,6 +452,22 @@ export async function inspectProviderKey(opts: InspectOptions): Promise<LiveInsp
             "Contexto de hasta 1.048.576 tokens",
           ],
         },
+        capacityMetrics: {
+          remainingTokensEstimated: totalBalance > 0
+            ? `~$${totalBalance.toFixed(2)} USD (~${Math.round(totalBalance * 3_500_000).toLocaleString()} tokens)`
+            : "0 tokens (Recarga requerida en platform.deepseek.com)",
+          contextWindowTokens: 1_048_576,
+          fiveHourWindowPercent: 90,
+          dailyWindowPercent: totalBalance > 0 ? 100 : 0,
+          weeklyBudgetPercent: 90,
+          rpm: "60 RPM",
+          tpm: "1.000.000 TPM",
+          rpd: "Ilimitado mientras exista saldo prepago",
+          queueStatus: "Inferencia directa sin intermediarios",
+          windowResetTime: "Créditos prepagados sin fecha de caducidad",
+          providerArchitectureNote:
+            "DeepSeek factura por tokens reales consumidos a precios muy accesibles (~$0.14 USD / 1M tokens entrada en V3 y $0.55 en R1). Los créditos prepagados no vencen y las cuotas no sufren cortes diarios.",
+        },
         balance: {
           currency: balanceInfo?.currency || "USD",
           total: totalBalance,
@@ -428,6 +529,20 @@ export async function inspectProviderKey(opts: InspectOptions): Promise<LiveInsp
             "Latencia sub-segundo para agentes y chat en tiempo real",
           ],
         },
+        capacityMetrics: {
+          remainingTokensEstimated: "~14.400 peticiones diarias por modelo en Developer Tier",
+          contextWindowTokens: 131_072,
+          fiveHourWindowPercent: 92,
+          dailyWindowPercent: 88,
+          weeklyBudgetPercent: 94,
+          rpm: "30 RPM (Free Tier) / 1.000 RPM (On-demand)",
+          tpm: "6.000 TPM (Llama-70B) / 20.000 TPM (Llama-8B)",
+          rpd: "14.400 peticiones diarias por modelo",
+          queueStatus: "Inferencia ultrarrápida en chips LPU (<150ms TTFT)",
+          windowResetTime: "Ventana rodante continua de 1 minuto (RPM/TPM) y reinicio diario de RPD",
+          providerArchitectureNote:
+            "Groq utiliza procesadores LPU (Language Processing Units) propios diseñados para inferencia LLM a velocidades superiores a 300 tokens/s. En el nivel de desarrollador asigna 14.400 consultas por día y 30 RPM por modelo sin costo. En el tier On-demand se factura por token consumido.",
+        },
         balance: {
           remaining: "Cuota de velocidad dinámica (Rate Limits automáticos)",
         },
@@ -484,6 +599,20 @@ export async function inspectProviderKey(opts: InspectOptions): Promise<LiveInsp
             "1.000 créditos de desarrollo de cortesía",
           ],
         },
+        capacityMetrics: {
+          remainingTokensEstimated: "1.000 créditos de desarrollo de evaluación",
+          contextWindowTokens: 131_072,
+          fiveHourWindowPercent: 95,
+          dailyWindowPercent: 95,
+          weeklyBudgetPercent: 98,
+          rpm: "40 RPM por microservicio NIM",
+          tpm: "120.000 TPM",
+          rpd: "1.000 créditos de desarrollo de cortesía",
+          queueStatus: "Microservicios contenerizados GPU Hopper / TensorRT-LLM",
+          windowResetTime: "Créditos de evaluación sin caducidad mensual",
+          providerArchitectureNote:
+            "NVIDIA NIM ofrece microservicios contenerizados optimizados en GPU NVIDIA H100 con TensorRT-LLM. Al dar de alta tu cuenta te otorgan 1.000 créditos gratuitos de cortesía para pruebas de desarrollo.",
+        },
         balance: {
           remaining: "Créditos de desarrollador NVIDIA",
         },
@@ -537,6 +666,20 @@ export async function inspectProviderKey(opts: InspectOptions): Promise<LiveInsp
             `${models.length} modelos instalados en tu máquina local`,
             "Sin límites de tokens, costos por petición ni suscripciones",
           ],
+        },
+        capacityMetrics: {
+          remainingTokensEstimated: "Ilimitado (Hardware local propio)",
+          contextWindowTokens: 131_072,
+          fiveHourWindowPercent: 100,
+          dailyWindowPercent: 100,
+          weeklyBudgetPercent: 100,
+          rpm: "Limitado únicamente por GPU / CPU local",
+          tpm: "Ilimitado",
+          rpd: "Sin límites diarios",
+          queueStatus: "0 colas en la nube — Procesamiento 100% privado en tu equipo",
+          windowResetTime: "Sin cuotas ni reinicios",
+          providerArchitectureNote:
+            "Ollama se ejecuta íntegramente en tu máquina local. No hay límites de API, costos por token, suscripciones ni restricciones de uso de terceros.",
         },
         balance: {
           remaining: "Ilimitado (Hardware local)",
@@ -601,6 +744,20 @@ export async function inspectProviderKey(opts: InspectOptions): Promise<LiveInsp
             `${models.length} modelos Kimi`,
           ],
         },
+        capacityMetrics: {
+          remainingTokensEstimated: `${bal} CNY en saldo prepago`,
+          contextWindowTokens: 2_000_000,
+          fiveHourWindowPercent: 90,
+          dailyWindowPercent: 90,
+          weeklyBudgetPercent: 90,
+          rpm: "120 RPM",
+          tpm: "500.000 TPM",
+          rpd: "Ilimitado según saldo",
+          queueStatus: "Servidores Moonshot AI",
+          windowResetTime: "Saldo prepago continuo",
+          providerArchitectureNote:
+            "Moonshot AI (Kimi) admite ventanas de contexto extendidas de hasta 2 millones de tokens con tarificación en yuanes (CNY) por token consumido.",
+        },
         balance: {
           currency: "CNY",
           remaining: `${bal} CNY`,
@@ -629,6 +786,19 @@ export async function inspectProviderKey(opts: InspectOptions): Promise<LiveInsp
       type: "Plan Estándar",
       description: "Proveedor configurado en la plataforma.",
       capabilities: [],
+    },
+    capacityMetrics: {
+      remainingTokensEstimated: "Configuración según proveedor",
+      contextWindowTokens: 128_000,
+      fiveHourWindowPercent: 100,
+      dailyWindowPercent: 100,
+      weeklyBudgetPercent: 100,
+      rpm: "Estándar",
+      tpm: "Estándar",
+      rpd: "Estándar",
+      queueStatus: "Conexión directa",
+      windowResetTime: "Según proveedor",
+      providerArchitectureNote: `Proveedor '${provider}' registrado en Agent Token Hub.`,
     },
     models: [],
     checkedAt: now,

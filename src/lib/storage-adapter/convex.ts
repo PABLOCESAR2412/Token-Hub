@@ -135,6 +135,8 @@ function mapSnapshot(db: any): UsageSnapshot {
     latencyMs: db.latencyMs ?? null,
     tokensPerSecond: db.tokensPerSecond ?? null,
     provider: db.provider ?? null,
+    caller: db.caller ?? null,
+    endpoint: db.endpoint ?? null,
     timestamp: db.timestamp || new Date(db._creationTime).toISOString(),
   };
 }
@@ -284,6 +286,8 @@ export const convexAdapter: StorageAdapter = {
       latencyMs: usage.latencyMs ?? null,
       tokensPerSecond: usage.tokensPerSecond ?? null,
       provider: usage.provider ?? null,
+      caller: usage.caller ?? null,
+      endpoint: usage.endpoint ?? null,
       timestamp,
     });
 

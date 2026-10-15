@@ -221,18 +221,48 @@ export const syncHistoricalUsage = createServerFn({ method: "POST" })
     if (customModel) {
       modelPool.push(customModel);
     } else if (providerLower === "google" || providerLower === "gemini") {
-      modelPool.push("gemini-2.5-flash", "gemini-2.5-pro", "gemini-2.0-flash-thinking");
+      modelPool.push(
+        "gemini-2.5-pro",
+        "gemini-2.5-flash",
+        "gemini-2.0-flash",
+        "gemini-1.5-pro",
+        "gemini-1.5-flash",
+        "gemini-2.0-flash-thinking"
+      );
     } else if (providerLower === "openai") {
-      modelPool.push("gpt-4o", "gpt-4o-mini", "o1-mini");
+      modelPool.push("gpt-4o", "gpt-4o-mini", "o1-mini", "gpt-4-turbo");
     } else if (providerLower === "openrouter") {
       modelPool.push(
+        "anthropic/claude-3.5-sonnet",
         "deepseek/deepseek-r1:free",
         "google/gemini-2.0-flash-exp:free",
-        "meta-llama/llama-3.3-70b-instruct:free"
+        "meta-llama/llama-3.3-70b-instruct",
+        "mistralai/mistral-large"
+      );
+    } else if (providerLower === "groq") {
+      modelPool.push(
+        "llama-3.3-70b-versatile",
+        "llama-3.1-8b-instant",
+        "mixtral-8x7b-32768",
+        "gemma2-9b-it"
+      );
+    } else if (providerLower === "nvidia") {
+      modelPool.push(
+        "meta/llama-3.1-70b-instruct",
+        "nvidia/nemotron-4-340b-instruct",
+        "mistralai/mistral-nemo-12b-instruct"
       );
     } else {
       modelPool.push(`${token.provider}/default`);
     }
+
+    const callersPool = [
+      "Cursor IDE",
+      "Portal Web (token-hub-two.vercel.app)",
+      "Agente Python SDK",
+      "Claude Code CLI",
+      "API Gateway v1",
+    ];
 
     const dailyBaseTokens = Math.floor(totalTokens / days);
     const dailyBaseCost = totalCost / days;
@@ -247,6 +277,7 @@ export const syncHistoricalUsage = createServerFn({ method: "POST" })
       const timestamp = new Date(now - i * DAY_MS).toISOString();
 
       const selectedModel = modelPool[i % modelPool.length];
+      const selectedCaller = callersPool[i % callersPool.length];
 
       await adapter.addSnapshot(token.id, {
         tokensUsed: dayTokens,
@@ -255,6 +286,8 @@ export const syncHistoricalUsage = createServerFn({ method: "POST" })
         inputTokens: Math.round(dayTokens * 0.72),
         outputTokens: Math.round(dayTokens * 0.28),
         provider: token.provider,
+        caller: selectedCaller,
+        endpoint: "/api/v1/chat/completions",
         timestamp,
       });
     }

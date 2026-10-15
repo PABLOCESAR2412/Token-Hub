@@ -4,6 +4,8 @@ import { RevealKey } from "../../components/RevealKey";
 import { LiveKeyInspector } from "../../components/LiveKeyInspector";
 import { CopyKeyButton } from "../../components/CopyKeyButton";
 import { ConfirmDialog, useConfirmDialog } from "../../components/ConfirmDialog";
+import { QuotaCapacityGaugeCard } from "../../components/QuotaCapacityGaugeCard";
+import { ClientTelemetryCard } from "../../components/ClientTelemetryCard";
 import { PROVIDER_CATALOG } from "../../lib/providers/catalog";
 import { getProviderGuide, providerHasAnalytics, providerVisibleFields, TAGS_HINT } from "../../lib/providers/guides";
 import { ProviderHelpDialog, ProviderHelpTrigger } from "../../components/ProviderHelp";
@@ -38,6 +40,7 @@ export const Route = createFileRoute("/token/$tokenId")({
 function TokenDetail() {
   const { tokenId } = Route.useParams();
   const { data: token, isLoading } = useToken(tokenId);
+  const { data: inspection } = useInspectToken(tokenId);
   const deleteToken = useDeleteToken();
   const addSnapshot = useAddSnapshot();
   const updateToken = useUpdateToken();
@@ -236,6 +239,16 @@ function TokenDetail() {
 
       <LiveKeyInspector tokenId={token.id} tokenName={token.name} provider={token.provider} />
 
+      <QuotaCapacityGaugeCard
+        provider={token.provider}
+        capacityMetrics={inspection?.capacityMetrics}
+        balance={inspection?.balance}
+        totalCost={token.totalCost}
+        maxUsd={token.maxUsd}
+        quota={token.quota}
+        tokensUsed={totalTokens}
+      />
+
       <EditTokenCard
         token={token}
         isPending={updateToken.isPending}
@@ -257,12 +270,19 @@ function TokenDetail() {
         provider={token.provider}
       />
 
+      <ClientTelemetryCard
+        snapshots={snapshots}
+        tokenId={token.id}
+        tokenName={token.name}
+      />
+
       <ModelBreakdownCard byModel={byModel} />
 
       <HealthProbeCard tokenId={token.id} provider={token.provider} />
 
       <ManualUsageCard
         tokenId={token.id}
+        provider={token.provider}
         isPending={addSnapshot.isPending}
         onSave={(t, c, model) => addSnapshot.mutate({ tokenId, tokensUsed: t, cost: c, model })}
       />
@@ -572,12 +592,24 @@ function AuditCard({ audit }: { audit: Array<{ id: string; action: string; token
   );
 }
 
+const SUGGESTED_MODELS_MAP: Record<string, string[]> = {
+  google: ["gemini-2.5-pro", "gemini-2.5-flash", "gemini-2.0-flash", "gemini-1.5-pro", "gemini-1.5-flash"],
+  openai: ["gpt-4o", "gpt-4o-mini", "o1", "o1-mini", "o3-mini", "gpt-4-turbo"],
+  openrouter: ["anthropic/claude-3.5-sonnet", "deepseek/deepseek-r1", "meta-llama/llama-3.3-70b-instruct", "openai/gpt-4o"],
+  groq: ["llama-3.3-70b-versatile", "llama-3.1-8b-instant", "deepseek-r1-distill-llama-70b"],
+  nvidia: ["meta/llama-3.3-70b-instruct", "deepseek-ai/deepseek-r1", "nvidia/llama-3.1-nemotron-70b-instruct"],
+  deepseek: ["deepseek-chat", "deepseek-reasoner"],
+  ollama: ["llama3.3", "qwen2.5", "mistral", "deepseek-r1"],
+};
+
 function ManualUsageCard({
   tokenId,
+  provider,
   onSave,
   isPending,
 }: {
   tokenId: string;
+  provider?: string;
   onSave: (tokens: number, cost: number, model?: string) => void;
   isPending: boolean;
 }) {
@@ -586,6 +618,9 @@ function ManualUsageCard({
   const [cost, setCost] = React.useState("");
   const [model, setModel] = React.useState("");
   const [error, setError] = React.useState<string | null>(null);
+
+  const providerKey = (provider || "").toLowerCase();
+  const suggestedModels = SUGGESTED_MODELS_MAP[providerKey] || [];
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -644,15 +679,34 @@ function ManualUsageCard({
           </div>
           <div className="sm:col-span-2">
             <label className="block font-mono text-xs uppercase text-bone/50 mb-1.5">
-              Modelo <span className="text-bone/30">(opcional, p. ej. gemini-3.1-pro)</span>
+              Modelo <span className="text-bone/30">(opcional, p. ej. {suggestedModels[0] || "gemini-2.5-pro"})</span>
             </label>
             <input
               type="text"
               value={model}
               onChange={(e) => setModel(e.target.value)}
-              placeholder="gemini-3-1-pro / gpt-4o / claude-..."
+              placeholder={suggestedModels.join(" / ") || "gemini-2.5-pro / gpt-4o / claude-..."}
               className={inputClass}
             />
+            {suggestedModels.length > 0 && (
+              <div className="flex flex-wrap items-center gap-1.5 mt-2">
+                <span className="font-mono text-[10px] text-bone/40">Modelos comunes:</span>
+                {suggestedModels.map((sm) => (
+                  <button
+                    key={sm}
+                    type="button"
+                    onClick={() => setModel(sm)}
+                    className={`font-mono text-[10px] border px-2 py-0.5 transition-colors cursor-pointer ${
+                      model === sm
+                        ? "border-electric text-electric bg-electric/10"
+                        : "border-bone/20 text-bone/60 hover:border-electric hover:text-electric"
+                    }`}
+                  >
+                    {sm}
+                  </button>
+                ))}
+              </div>
+            )}
           </div>
           <div className="sm:col-span-2">
             <button
