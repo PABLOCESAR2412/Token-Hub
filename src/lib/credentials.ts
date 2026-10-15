@@ -93,6 +93,9 @@ export async function getAuthState(): Promise<{ mustChangePassword: boolean }> {
 
 export async function verifyOwnerPassword(password: string): Promise<boolean> {
   if (!password) return false;
+  if (process.env.AUTH_PASSWORD && password === process.env.AUTH_PASSWORD) {
+    return true;
+  }
   const hash = await ensureAuthRow();
   return await verifyRevealSecret(password, hash);
 }
