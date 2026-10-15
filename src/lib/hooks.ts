@@ -9,6 +9,7 @@ import type {
   TokenWithUsage,
   UpdateTokenInput,
   UsageSnapshot,
+  TelegramSettings,
 } from "../lib/types";
 
 const isDemo = process.env.APP_MODE === "demo";
@@ -348,6 +349,55 @@ export function useCopyTokenKey() {
     },
   });
 }
+
+export function useTelegramSettings() {
+  return useQuery({
+    queryKey: ["telegram-settings"],
+    queryFn: async (): Promise<TelegramSettings> => {
+      if (isDemo) {
+        const adapter = await loadAdapter();
+        return (await adapter.getSettings("telegram")) || {
+          enabled: false,
+          botToken: "",
+          chatId: "",
+          alertOn429: true,
+          alertOnCap: true,
+          alertOnHealthError: true,
+        };
+      }
+      const fns = await getServerFns();
+      return (await callServer(() => fns.getTelegramSettings())) as TelegramSettings;
+    },
+    staleTime: 60_000,
+  });
+}
+
+export function useSaveTelegramSettings() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (settings: TelegramSettings): Promise<TelegramSettings> => {
+      if (isDemo) {
+        const adapter = await loadAdapter();
+        return await adapter.saveSettings("telegram", settings);
+      }
+      const fns = await getServerFns();
+      return (await callServer(() => fns.saveTelegramSettings({ data: settings }))) as TelegramSettings;
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["telegram-settings"] });
+    },
+  });
+}
+
+export function useSendTestTelegramAlert() {
+  return useMutation({
+    mutationFn: async (input?: { botToken?: string; chatId?: string }): Promise<{ ok: boolean; error?: string }> => {
+      const fns = await getServerFns();
+      return (await callServer(() => fns.sendTestTelegramAlertFn({ data: input }))) as { ok: boolean; error?: string };
+    },
+  });
+}
+
 
 
 

@@ -2,7 +2,8 @@ import { createServerFn } from "@tanstack/react-start";
 import { getRequest } from "@tanstack/react-start/server";
 import { loadAdapter } from "../lib/storage-adapter";
 import { isAuthorized, unauthorized } from "../lib/auth";
-import type { CreateTokenInput, UpdateTokenInput } from "../lib/types";
+import type { CreateTokenInput, UpdateTokenInput, TelegramSettings } from "../lib/types";
+import { getTelegramConfig, sendTestTelegramAlert } from "../lib/telegram";
 
 export const unauthorizedResponse = unauthorized;
 
@@ -327,6 +328,29 @@ export const copyTokenKey = createServerFn({ method: "POST" })
 
     return { key };
   });
+
+export const getTelegramSettings = createServerFn({ method: "GET" })
+  .handler(async () => {
+    if (!isAuthorized(getRequest())) return unauthorizedResponse();
+    return await getTelegramConfig();
+  });
+
+export const saveTelegramSettings = createServerFn({ method: "POST" })
+  .validator((input: TelegramSettings) => input)
+  .handler(async ({ data }) => {
+    if (!isAuthorized(getRequest())) return unauthorizedResponse();
+    const adapter = await loadAdapter();
+    await adapter.saveSettings("telegram", data);
+    return data;
+  });
+
+export const sendTestTelegramAlertFn = createServerFn({ method: "POST" })
+  .validator((input?: { botToken?: string; chatId?: string }) => input)
+  .handler(async ({ data }) => {
+    if (!isAuthorized(getRequest())) return unauthorizedResponse();
+    return await sendTestTelegramAlert(data);
+  });
+
 
 
 

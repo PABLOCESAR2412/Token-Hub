@@ -120,6 +120,7 @@ async function mapToken(db: any): Promise<Token> {
     maxUsd: db.maxUsd ?? null,
     tags: db.tags ?? [],
     agent: db.agent ?? null,
+    fallbackTokenId: db.fallbackTokenId ?? null,
   };
 }
 
@@ -209,6 +210,7 @@ export const convexAdapter: StorageAdapter = {
       trackingKey: input.trackingKey ? encrypt(input.trackingKey) : null,
       baseUrl: input.baseUrl ?? null,
       notes: input.notes ?? null,
+      fallbackTokenId: input.fallbackTokenId ?? null,
       createdAt,
     });
 
@@ -240,6 +242,7 @@ export const convexAdapter: StorageAdapter = {
     if (input.trackingKey !== undefined) patches.trackingKey = input.trackingKey ? encrypt(input.trackingKey) : null;
     if (input.baseUrl !== undefined) patches.baseUrl = input.baseUrl ?? null;
     if (input.notes !== undefined) patches.notes = input.notes ?? null;
+    if (input.fallbackTokenId !== undefined) patches.fallbackTokenId = input.fallbackTokenId ?? null;
     if (input.active !== undefined) patches.active = input.active;
     if (input.maxUsd !== undefined) patches.maxUsd = input.maxUsd ?? null;
     if (input.tags !== undefined) patches.tags = input.tags;
@@ -424,5 +427,19 @@ export const convexAdapter: StorageAdapter = {
       detail: entry.detail ?? null,
       createdAt: new Date().toISOString(),
     });
+  },
+
+  getSettings: async (key: string) => {
+    const convex = getConvexClient();
+    try {
+      return await convex.query((api as any).settings.get, { key });
+    } catch {
+      return null;
+    }
+  },
+
+  saveSettings: async (key: string, value: any) => {
+    const convex = getConvexClient();
+    return await convex.mutation((api as any).settings.set, { key, value });
   },
 };

@@ -11,6 +11,8 @@ import { LoginScreen } from "../components/LoginScreen";
 import { ChangePasswordScreen } from "../components/ChangePasswordScreen";
 import { useSession } from "../lib/use-session";
 import { ChangePasswordDialog } from "../components/ChangePasswordDialog";
+import { TelegramSettingsDialog } from "../components/TelegramSettingsDialog";
+import { Bell } from "lucide-react";
 import "../global.css";
 
 const isProduction = process.env.APP_MODE === "production";
@@ -163,9 +165,19 @@ function AuthLayout({ children }: { children: React.ReactNode }) {
 function HeaderActions() {
   const { logout, authed, mustChangePassword } = useSession();
   const [showPassword, setShowPassword] = React.useState(false);
+  const [showTelegram, setShowTelegram] = React.useState(false);
   if (!authed || mustChangePassword) return <LogoutButton />;
   return (
     <>
+      <button
+        onClick={() => setShowTelegram(true)}
+        className="flex items-center gap-1.5 border border-bone/20 px-2 py-1 text-bone/60 hover:text-electric hover:border-electric/40 transition-colors"
+        title="Configurar Alertas de Telegram"
+      >
+        <Bell size={12} className="text-electric" />
+        <span>ALERTAS</span>
+      </button>
+      {showTelegram && <TelegramSettingsDialog onClose={() => setShowTelegram(false)} />}
       <button
         onClick={() => setShowPassword((s) => !s)}
         className="border border-bone/20 px-2 py-1 text-bone/60 hover:text-electric hover:border-electric/40 transition-colors"

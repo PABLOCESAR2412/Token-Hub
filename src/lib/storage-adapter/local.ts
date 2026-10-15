@@ -346,6 +346,22 @@ export const localAdapter: StorageAdapter = {
     return list;
   },
 
+  getSettings: async (key: string) => {
+    if (typeof window === "undefined") return null;
+    try {
+      const raw = localStorage.getItem(`ath_setting_${key}`);
+      return raw ? JSON.parse(raw) : null;
+    } catch {
+      return null;
+    }
+  },
+
+  saveSettings: async (key: string, value: any) => {
+    if (typeof window === "undefined") return value;
+    localStorage.setItem(`ath_setting_${key}`, JSON.stringify(value));
+    return value;
+  },
+
   addAudit: async (entry) => {
     await addAuditLocal(entry);
   },

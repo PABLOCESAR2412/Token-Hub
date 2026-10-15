@@ -286,6 +286,9 @@ export const supabaseAdapter: StorageAdapter = {
     return rows.map(mapAudit);
   },
 
+  getSettings: async (_key: string) => null,
+  saveSettings: async (_key: string, value: any) => value,
+
   addAudit: async (entry) => {
     await prisma.tokenAudit.create({ data: entry as any });
   },

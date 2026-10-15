@@ -103,15 +103,25 @@ function Dashboard() {
     {
       accessorKey: "name",
       header: "Nombre",
-      cell: (info) => (
-        <Link
-          to="/token/$tokenId"
-          params={{ tokenId: info.row.original.id }}
-          className="text-electric hover:underline font-medium"
-        >
-          {info.getValue()}
-        </Link>
-      ),
+      cell: (info) => {
+        const token = info.row.original;
+        return (
+          <div className="flex flex-col">
+            <Link
+              to="/token/$tokenId"
+              params={{ tokenId: token.id }}
+              className="text-electric hover:underline font-medium"
+            >
+              {info.getValue()}
+            </Link>
+            {token.fallbackTokenId && (
+              <span className="font-mono text-[10px] text-amber-400/80">
+                🔄 fallback activo
+              </span>
+            )}
+          </div>
+        );
+      },
     },
     {
       accessorKey: "provider",

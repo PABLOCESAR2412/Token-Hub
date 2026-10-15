@@ -49,6 +49,8 @@ export interface StorageAdapter {
   setTokenActive: (id: string, active: boolean) => Promise<Token>;
   getAuditLog: (tokenId?: string) => Promise<TokenAudit[]>;
   addAudit: (entry: { tokenId?: string | null; tokenName?: string | null; action: string; detail?: string | null }) => Promise<void>;
+  getSettings: (key: string) => Promise<any>;
+  saveSettings: (key: string, value: any) => Promise<any>;
 }
 
 async function loadAdapter(): Promise<StorageAdapter> {

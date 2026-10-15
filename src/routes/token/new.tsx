@@ -1,5 +1,5 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
-import { useAddToken } from "../../lib/hooks";
+import { useAddToken, useTokens } from "../../lib/hooks";
 import { PROVIDER_CATALOG } from "../../lib/providers/catalog";
 import {
   getProviderGuide,
@@ -18,6 +18,7 @@ export const Route = createFileRoute("/token/new")({
 function TokenForm() {
   const navigate = useNavigate();
   const addToken = useAddToken();
+  const { data: existingTokens = [] } = useTokens();
   const [form, setForm] = React.useState({
     name: "",
     provider: "openrouter",
@@ -31,6 +32,7 @@ function TokenForm() {
     tags: "",
     agent: "",
     maxUsd: "",
+    fallbackTokenId: "",
   });
   const [error, setError] = React.useState("");
   const [showHelp, setShowHelp] = React.useState(false);
@@ -76,6 +78,7 @@ function TokenForm() {
         ...(form.tags.trim() ? { tags: form.tags.split(",").map((t) => t.trim()).filter(Boolean) } : {}),
         ...(form.agent.trim() ? { agent: form.agent.trim() } : {}),
         ...(form.maxUsd.trim() ? { maxUsd: parseFloat(form.maxUsd) || undefined } : {}),
+        ...(form.fallbackTokenId ? { fallbackTokenId: form.fallbackTokenId } : {}),
       },
       {
         onSuccess: () => navigate({ to: "/" }),
@@ -323,6 +326,29 @@ function TokenForm() {
             {"> se guarda hasheada y solo sirve para revelar la key con temporizador"}
           </p>
         </div>
+
+        {existingTokens.length > 0 && (
+          <div>
+            <label className="block font-mono text-xs uppercase text-bone/50 mb-2">
+              [ Token de Respaldo / Fallback Estático ] <span className="text-bone/30">(opcional)</span>
+            </label>
+            <select
+              value={form.fallbackTokenId}
+              onChange={(e) => setForm({ ...form, fallbackTokenId: e.target.value })}
+              className={inputClass}
+            >
+              <option value="">-- Sin respaldo estático (Automático según proveedor) --</option>
+              {existingTokens.map((t) => (
+                <option key={t.id} value={t.id}>
+                  {t.name} ({t.provider})
+                </option>
+              ))}
+            </select>
+            <p className="font-mono text-xs text-bone/40 mt-1.5">
+              {"> En caso de recibir HTTP 429 (Rate Limit) o agotarse la cuota, el Gateway conmutará automáticamente a este token."}
+            </p>
+          </div>
+        )}
 
         <button
           type="submit"

@@ -47,6 +47,7 @@ export const create = mutation({
     trackingKey: v.optional(v.union(v.string(), v.null())),
     baseUrl: v.optional(v.union(v.string(), v.null())),
     notes: v.optional(v.union(v.string(), v.null())),
+    fallbackTokenId: v.optional(v.union(v.string(), v.null())),
     createdAt: v.string(),
   },
   handler: async (ctx, args) => {
@@ -67,6 +68,7 @@ export const update = mutation({
     trackingKey: v.optional(v.union(v.string(), v.null())),
     baseUrl: v.optional(v.union(v.string(), v.null())),
     notes: v.optional(v.union(v.string(), v.null())),
+    fallbackTokenId: v.optional(v.union(v.string(), v.null())),
     active: v.optional(v.boolean()),
     maxUsd: v.optional(v.union(v.number(), v.null())),
     tags: v.optional(v.array(v.string())),

@@ -31,6 +31,7 @@ export interface Token {
   maxUsd?: number | null;
   tags: string[];
   agent?: string | null;
+  fallbackTokenId?: string | null;
 }
 
 export interface TokenAudit {
@@ -76,6 +77,7 @@ export type CreateTokenInput = {
   maxUsd?: number;
   tags?: string[];
   agent?: string;
+  fallbackTokenId?: string | null;
 };
 
 export type UpdateTokenInput = {
@@ -93,4 +95,14 @@ export type UpdateTokenInput = {
   maxUsd?: number | null;
   tags?: string[];
   agent?: string | null;
+  fallbackTokenId?: string | null;
 };
+
+export interface TelegramSettings {
+  enabled: boolean;
+  botToken: string;
+  chatId: string;
+  alertOn429: boolean;
+  alertOnCap: boolean;
+  alertOnHealthError: boolean;
+}

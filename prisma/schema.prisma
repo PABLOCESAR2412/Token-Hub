@@ -38,6 +38,7 @@ model Token {
   trackingKey      String? // Encrypted tracking key (optional, e.g. per-token metrics)
   baseUrl          String? // Optional custom base URL for the provider API
   notes            String? // Free-form observations
+  fallbackTokenId  String? // Optional backup token ID for static fallback
 
   providerId String
   provider   Provider @relation(fields: [providerId], references: [id])

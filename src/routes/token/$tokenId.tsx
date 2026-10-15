@@ -1,5 +1,5 @@
 import { createFileRoute, Link, useRouter } from "@tanstack/react-router";
-import { useToken, useDeleteToken, useAddSnapshot, useUpdateToken, useTotpStatus, useSetTokenActive, useAuditLog, useSyncHistoricalUsage, useInspectToken } from "../../lib/hooks";
+import { useToken, useTokens, useDeleteToken, useAddSnapshot, useUpdateToken, useTotpStatus, useSetTokenActive, useAuditLog, useSyncHistoricalUsage, useInspectToken } from "../../lib/hooks";
 import { RevealKey } from "../../components/RevealKey";
 import { LiveKeyInspector } from "../../components/LiveKeyInspector";
 import { CopyKeyButton } from "../../components/CopyKeyButton";
@@ -40,6 +40,8 @@ export const Route = createFileRoute("/token/$tokenId")({
 function TokenDetail() {
   const { tokenId } = Route.useParams();
   const { data: token, isLoading } = useToken(tokenId);
+  const { data: allTokens = [] } = useTokens();
+  const fallbackToken = allTokens.find((t) => t.id === token?.fallbackTokenId);
   const { data: inspection } = useInspectToken(tokenId);
   const deleteToken = useDeleteToken();
   const addSnapshot = useAddSnapshot();
@@ -227,8 +229,17 @@ function TokenDetail() {
           <CopyKeyButton tokenId={token.id} label="Copiar Key" />
         </div>
 
-        <div className="flex flex-wrap items-center justify-between text-xs font-mono text-bone/50 pt-1">
+        <div className="flex flex-wrap items-center justify-between text-xs font-mono text-bone/50 pt-1 gap-2">
           <span>Cuota: {token.quota === 0 ? "Ilimitada" : token.quota.toLocaleString()}</span>
+          {fallbackToken ? (
+            <span className="text-amber-400 border border-amber-500/30 bg-amber-950/20 px-2 py-0.5">
+              🔄 Fallback Estático: <strong>{fallbackToken.name}</strong> ({fallbackToken.provider})
+            </span>
+          ) : (
+            <span className="text-bone/40 border border-bone/10 px-2 py-0.5">
+              🔄 Fallback: Automático
+            </span>
+          )}
           {token.agent && (
             <span>
               Agente: <strong className="text-electric">{token.agent}</strong>
@@ -741,6 +752,8 @@ function EditTokenCard({
   const wasPending = React.useRef(false);
   const totpStatus = useTotpStatus();
   const hasTotp = totpStatus.data?.enabled === true;
+  const { data: allTokens = [] } = useTokens();
+  const otherTokens = allTokens.filter((t) => t.id !== token.id);
   const [form, setForm] = React.useState({
     name: token.name,
     provider: token.provider,
@@ -754,6 +767,7 @@ function EditTokenCard({
     tags: (token.tags ?? []).join(", "),
     agent: token.agent ?? "",
     maxUsd: typeof token.maxUsd === "number" ? String(token.maxUsd) : "",
+    fallbackTokenId: token.fallbackTokenId ?? "",
   });
 
   const inputClass =
@@ -787,10 +801,11 @@ function EditTokenCard({
         tags: (token.tags ?? []).join(", "),
         agent: token.agent ?? "",
         maxUsd: typeof token.maxUsd === "number" ? String(token.maxUsd) : "",
+        fallbackTokenId: token.fallbackTokenId ?? "",
       }));
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [token.name, token.quota, token.baseUrl, token.notes, isPending]);
+  }, [token.name, token.quota, token.baseUrl, token.notes, token.fallbackTokenId, isPending]);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -818,6 +833,7 @@ function EditTokenCard({
       ...(form.tags.trim() ? { tags: form.tags.split(",").map((t) => t.trim()).filter(Boolean) } : { tags: [] }),
       ...(form.agent.trim() ? { agent: form.agent.trim() } : { agent: null }),
       ...(form.maxUsd.trim() ? { maxUsd: parseFloat(form.maxUsd) || null } : { maxUsd: null }),
+      fallbackTokenId: form.fallbackTokenId || null,
       ...(hasTotp && code ? { code } : {}),
     });
     setForm((f) => ({ ...f, apiKey: "", publicKey: "", trackingKey: "", revealSecret: "" }));
@@ -1055,6 +1071,29 @@ function EditTokenCard({
               />
               <p className="font-mono text-xs text-bone/40 mt-1.5">
                 {"> requerido para guardar cambios mientras el 2FA este activo"}
+              </p>
+            </div>
+          )}
+
+          {otherTokens.length > 0 && (
+            <div>
+              <label className="block font-mono text-xs uppercase text-bone/50 mb-1.5">
+                [ Token de Respaldo / Fallback Estático ]
+              </label>
+              <select
+                value={form.fallbackTokenId}
+                onChange={(e) => setForm({ ...form, fallbackTokenId: e.target.value })}
+                className={inputClass}
+              >
+                <option value="">-- Sin respaldo estático (Automático según proveedor) --</option>
+                {otherTokens.map((t) => (
+                  <option key={t.id} value={t.id}>
+                    {t.name} ({t.provider})
+                  </option>
+                ))}
+              </select>
+              <p className="font-mono text-xs text-bone/40 mt-1.5">
+                {"> Ante errores HTTP 429 o saturación, el Gateway conmutará automáticamente a este token."}
               </p>
             </div>
           )}
