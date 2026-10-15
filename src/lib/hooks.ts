@@ -308,3 +308,30 @@ export function useInspectToken(tokenId?: string) {
   });
 }
 
+export function useSyncHistoricalUsage() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (input: {
+      tokenId: string;
+      days?: number;
+      totalTokens?: number;
+      totalCost?: number;
+      model?: string;
+    }) => {
+      const fns = await getServerFns();
+      return (await callServer(() => fns.syncHistoricalUsage({ data: input }))) as {
+        ok: boolean;
+        days: number;
+        totalTokens: number;
+        totalCost: number;
+      };
+    },
+    onSuccess: (_data, vars) => {
+      qc.invalidateQueries({ queryKey: ["token", vars.tokenId] });
+      qc.invalidateQueries({ queryKey: ["tokens"] });
+      qc.invalidateQueries({ queryKey: ["snapshots", vars.tokenId] });
+    },
+  });
+}
+
+

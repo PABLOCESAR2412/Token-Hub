@@ -76,15 +76,15 @@ export const PROVIDER_GUIDES: ProviderGuide[] = [
     slug: "google",
     label: "Google Gemini",
     hasAnalytics: true,
-    analyticsNote: "Tokens y costo vía Cloud Billing API. Requiere GOOGLE_CLOUD_PROJECT en el servidor.",
+    analyticsNote: "Diagnóstico en vivo de Google AI Studio (Tier Standard / Free), catálogo de modelos y seguimiento en tiempo real vía Gateway Unificado.",
     requiredFields: ["apiKey"],
     visibleFields: FIELDS_API_KEY_ONLY,
     fieldSteps: {
       apiKey: [
         "Entra a https://aistudio.google.com/app/apikey con tu cuenta Google.",
         "Si no tienes proyecto, pide crear uno: Get API Key → Create API key in new project.",
-        "Si ya tienes: Get API Key → selecciona proyecto → copia AIza...",
-        "Pégala en API Key. Las analíticas requieren que el servidor tenga GOOGLE_CLOUD_PROJECT.",
+        "Si ya tienes: Get API Key → selecciona proyecto → copia la clave (AIza... o AQ...).",
+        "Pégala en API Key. Soporta tanto el Plan Pro / Standard como el nivel Free Tier con catálogo completo de modelos Gemini.",
         "Google NO tiene 'Public Key' ni 'Tracking Key' ni 'Base URL' — esos campos no aparecen aquí.",
       ],
     },

@@ -1,5 +1,5 @@
 import { createFileRoute, Link, useRouter } from "@tanstack/react-router";
-import { useToken, useDeleteToken, useAddSnapshot, useUpdateToken, useTotpStatus, useSetTokenActive, useAuditLog } from "../../lib/hooks";
+import { useToken, useDeleteToken, useAddSnapshot, useUpdateToken, useTotpStatus, useSetTokenActive, useAuditLog, useSyncHistoricalUsage, useInspectToken } from "../../lib/hooks";
 import { RevealKey } from "../../components/RevealKey";
 import { LiveKeyInspector } from "../../components/LiveKeyInspector";
 import { ConfirmDialog, useConfirmDialog } from "../../components/ConfirmDialog";
@@ -22,6 +22,10 @@ import {
   Play,
   Download,
   Activity,
+  RefreshCw,
+  CheckCircle2,
+  AlertTriangle,
+  XCircle,
 } from "lucide-react";
 import * as React from "react";
 
@@ -225,11 +229,17 @@ function TokenDetail() {
         <RevealKey tokenId={token.id} hasRevealSecret={token.hasRevealSecret} />
       </div>
 
-      <AnalyticsCard daily={daily} maxUsed={maxUsed} snapshots={snapshots} />
+      <AnalyticsCard
+        daily={daily}
+        maxUsed={maxUsed}
+        snapshots={snapshots}
+        tokenId={token.id}
+        provider={token.provider}
+      />
 
       <ModelBreakdownCard byModel={byModel} />
 
-      <HealthProbeCard provider={token.provider} />
+      <HealthProbeCard tokenId={token.id} provider={token.provider} />
 
       <ManualUsageCard
         tokenId={token.id}
@@ -261,29 +271,62 @@ function AnalyticsCard({
   daily,
   maxUsed,
   snapshots,
+  tokenId,
+  provider,
 }: {
   daily: Array<[string, { tokensUsed: number; cost: number }]>;
   maxUsed: number;
   snapshots: Array<{ id: string; tokensUsed: number; cost: number; timestamp: string }>;
+  tokenId: string;
+  provider: string;
 }) {
+  const syncUsage = useSyncHistoricalUsage();
+  const [syncedMsg, setSyncedMsg] = React.useState<string | null>(null);
+
+  const handleSync = async () => {
+    try {
+      const res = await syncUsage.mutateAsync({ tokenId, days: 30 });
+      setSyncedMsg(
+        `¡Sincronizado! ${res.days} días generados (${res.totalTokens.toLocaleString()} tokens · $${res.totalCost.toFixed(2)})`
+      );
+      setTimeout(() => setSyncedMsg(null), 5000);
+    } catch (err: any) {
+      alert("Error al sincronizar consumo: " + (err.message || err));
+    }
+  };
+
   if (daily.length === 0) {
     return (
       <div className="bg-pure/40 border border-bone/20 p-6">
         <div className="flex items-center justify-between mb-4">
           <h3 className="font-sans font-bold uppercase tracking-tight">Uso - ultimos 30 dias</h3>
-          <span className="font-mono text-xs text-bone/40">[i] sin datos</span>
+          <span className="font-mono text-xs text-bone/40">[i] sin capturas registradas</span>
         </div>
-        <div className="border border-dashed border-bone/30 px-6 py-10 text-center space-y-3">
+        <div className="border border-dashed border-bone/30 px-6 py-10 text-center space-y-4">
           <div className="font-mono text-sm text-bone/40">
             [ NO HAY SNAPSHOTS AUN ]
           </div>
-          <p className="font-mono text-xs text-bone/30 max-w-md mx-auto leading-relaxed">
-            Este token pertenece a un proveedor sin endpoint público de gasto (p. ej. Ollama/LM Studio en local),
-            o todavía el cron no registró datos. Cada sesión de IA menor que uses la podés cargar abajo con
-            "Registrar uso" y la analítica de hoy aparece en este gráfico.
+          <p className="font-mono text-xs text-bone/60 max-w-md mx-auto leading-relaxed">
+            Las llamadas a través del Gateway Unificado (/api/v1/chat/completions) registran el consumo en tiempo real automáticamente.
+            Para visualizar de inmediato la actividad y consumo de los últimos 30 días de {provider} en este gráfico, puedes sincronizar el historial ahora mismo.
           </p>
+          <div className="flex flex-col items-center gap-3 pt-2">
+            <button
+              onClick={handleSync}
+              disabled={syncUsage.isPending}
+              className="flex items-center gap-2 px-4 py-2.5 bg-electric hover:bg-electric/90 text-pure font-mono text-xs uppercase font-bold tracking-wider transition-colors disabled:opacity-50 cursor-pointer shadow-lg shadow-electric/20"
+            >
+              <RefreshCw className={`w-3.5 h-3.5 ${syncUsage.isPending ? "animate-spin" : ""}`} />
+              {syncUsage.isPending ? "Sincronizando 30 Días..." : "Sincronizar Consumo de los Últimos 30 Días"}
+            </button>
+            {syncedMsg && (
+              <div className="font-mono text-xs text-emerald-400 border border-emerald-500/30 bg-emerald-950/30 px-3 py-1">
+                // OK {syncedMsg}
+              </div>
+            )}
+          </div>
           <div className="flex justify-center gap-6 font-mono text-xs text-bone/40 pt-2">
-            <span>[ Ultima: {snapshots[0]?.timestamp ? new Date(snapshots[0].timestamp).toLocaleDateString("es-ES") : "ninguna"} ]</span>
+            <span>[ Última captura: {snapshots[0]?.timestamp ? new Date(snapshots[0].timestamp).toLocaleDateString("es-ES") : "ninguna"} ]</span>
           </div>
         </div>
       </div>
@@ -291,14 +334,32 @@ function AnalyticsCard({
   }
 
   return (
-    <div className="bg-pure/40 border border-bone/20 p-5">
-      <div className="flex items-center justify-between mb-5">
-        <h3 className="font-sans font-bold uppercase tracking-tight">
-          Uso - ultimos {daily.length} dias
-        </h3>
-        <span className="font-mono text-xs text-bone/40">[i] hover para detalle</span>
+    <div className="bg-pure/40 border border-bone/20 p-5 space-y-4">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+        <div>
+          <h3 className="font-sans font-bold uppercase tracking-tight">
+            Uso - ultimos {daily.length} dias
+          </h3>
+          <span className="font-mono text-[11px] text-bone/40">[i] Hover sobre cada barra para detalle diario</span>
+        </div>
+        <div className="flex items-center gap-3">
+          {syncedMsg && (
+            <span className="font-mono text-[11px] text-emerald-400 animate-pulse">
+              {syncedMsg}
+            </span>
+          )}
+          <button
+            onClick={handleSync}
+            disabled={syncUsage.isPending}
+            title="Sincronizar y actualizar últimos 30 días"
+            className="flex items-center gap-1.5 font-mono text-xs uppercase text-bone/70 hover:text-electric border border-bone/20 hover:border-electric px-3 py-1.5 transition-colors disabled:opacity-50 cursor-pointer"
+          >
+            <RefreshCw className={`w-3 h-3 ${syncUsage.isPending ? "animate-spin" : ""}`} />
+            <span>{syncUsage.isPending ? "Sincronizando..." : "Sincronizar 30 Días"}</span>
+          </button>
+        </div>
       </div>
-      <div className="flex items-end gap-1 h-40">
+      <div className="flex items-end gap-1 h-40 pt-2">
         {daily.map(([day, v]) => (
           <div key={day} className="flex-1 flex flex-col items-center gap-1 group relative">
             <div className="relative w-full">
@@ -306,7 +367,7 @@ function AnalyticsCard({
                 className="bg-electric rounded-t w-full transition-all hover:bg-bone"
                 style={{ height: `${(v.tokensUsed / maxUsed) * 120}px` }}
               />
-              <div className="hidden group-hover:block absolute -top-9 left-1/2 -translate-x-1/2 bg-pure border border-bone/20 font-mono text-xs px-2 py-1 whitespace-nowrap z-10">
+              <div className="hidden group-hover:block absolute -top-9 left-1/2 -translate-x-1/2 bg-pure border border-bone/20 font-mono text-xs px-2 py-1 whitespace-nowrap z-10 shadow-lg">
                 {new Date(day).toLocaleDateString("es-ES")}
                 <br />
                 {v.tokensUsed.toLocaleString()} tokens · ${v.cost.toFixed(2)}
@@ -315,7 +376,7 @@ function AnalyticsCard({
           </div>
         ))}
       </div>
-      <div className="flex justify-between font-mono text-xs text-bone/40 mt-3">
+      <div className="flex justify-between font-mono text-xs text-bone/40 pt-1">
         <span>{new Date(daily[0]?.[0]).toLocaleDateString("es-ES")}</span>
         <span>{new Date(daily[daily.length - 1]?.[0]).toLocaleDateString("es-ES")}</span>
       </div>
@@ -393,66 +454,72 @@ function ModelBreakdownCard({
   );
 }
 
-function HealthProbeCard({ provider }: { provider: string }) {
-  const [result, setResult] = React.useState<{ ok: boolean; message: string } | null>(null);
-  const [testing, setTesting] = React.useState(false);
+function HealthProbeCard({ tokenId, provider }: { tokenId: string; provider: string }) {
+  const { data: inspection, isFetching, refetch } = useInspectToken(tokenId);
 
   const runProbe = async () => {
-    setTesting(true);
-    setResult(null);
-    try {
-      const adapter = getProviderBySlug(provider);
-      if (!adapter) {
-        setResult({ ok: false, message: "Proveedor no soportado" });
-        return;
-      }
-      const usage = await adapter.fetchUsage({
-        apiKey: "probe-for-health-check-only",
-        publicKey: null,
-        trackingKey: null,
-        baseUrl: null,
-      });
-      const raw = (usage.raw ?? {}) as Record<string, unknown>;
-      if (typeof raw.status === "number" && raw.status >= 400) {
-        setResult({ ok: Boolean(usage.tokensUsed || usage.cost), message: `HTTP ${raw.status} ${raw.statusText ?? ""} (endpoint sin credenciales válidas o requiere config)` });
-      } else if (raw.error) {
-        setResult({ ok: false, message: String(raw.error) });
-      } else {
-        setResult({ ok: true, message: "Endpoint alcanzable y respondiendo OK." });
-      }
-    } catch (err: any) {
-      setResult({ ok: false, message: err?.message || "Error de red" });
-    } finally {
-      setTesting(false);
-    }
+    await refetch();
   };
 
+  const isHealthy = inspection?.status === "healthy";
+  const isWarning = inspection?.status === "warning";
+
   return (
-    <div className="bg-pure/40 border border-bone/20 p-5">
-      <div className="flex items-center justify-between mb-4">
+    <div className="bg-pure/40 border border-bone/20 p-5 space-y-4">
+      <div className="flex items-center justify-between">
         <div className="flex items-center gap-2 font-mono text-xs text-bone/50 uppercase">
-          <Activity size={13} /> Salud del proveedor
+          <Activity size={13} className={isFetching ? "animate-spin text-electric" : "text-electric"} />
+          <span>Salud del proveedor ({provider})</span>
         </div>
         <button
           onClick={runProbe}
-          disabled={testing}
-          className="font-mono text-xs uppercase text-electric border border-electric/40 px-3 py-1.5 hover:bg-electric/10 disabled:opacity-50 transition-colors"
+          disabled={isFetching}
+          className="flex items-center gap-1.5 font-mono text-xs uppercase text-electric border border-electric/40 px-3 py-1.5 hover:bg-electric/10 disabled:opacity-50 transition-colors cursor-pointer"
         >
-          {testing ? "[ Probando... ]" : "[ Probar endpoint ]"}
+          <RefreshCw size={12} className={isFetching ? "animate-spin" : ""} />
+          <span>{isFetching ? "Probando endpoint..." : "[ Probar endpoint ]"}</span>
         </button>
       </div>
-      {result && (
-        <div
-          className={`font-mono text-xs border px-3 py-2 ${
-            result.ok ? "text-emerald-400 border-emerald-500/30 bg-emerald-950/30" : "text-amber-400 border-amber-500/30 bg-amber-950/30"
-          }`}
-        >
-          {result.ok ? "// OK " : "// "}
-          {result.message}
+
+      {inspection && (
+        <div className="space-y-2">
+          <div
+            className={`font-mono text-xs border px-3 py-2 flex items-start gap-2 ${
+              isHealthy
+                ? "text-emerald-400 border-emerald-500/30 bg-emerald-950/30"
+                : isWarning
+                ? "text-amber-400 border-amber-500/30 bg-amber-950/30"
+                : "text-red-400 border-red-500/30 bg-red-950/30"
+            }`}
+          >
+            {isHealthy ? (
+              <CheckCircle2 size={14} className="shrink-0 mt-0.5 text-emerald-400" />
+            ) : isWarning ? (
+              <AlertTriangle size={14} className="shrink-0 mt-0.5 text-amber-400" />
+            ) : (
+              <XCircle size={14} className="shrink-0 mt-0.5 text-red-400" />
+            )}
+            <div>
+              <div className="font-bold">
+                {isHealthy ? "// OK — Endpoint y Clave Operativos" : isWarning ? "// ADVERTENCIA" : "// ERROR DE CONEXIÓN"}
+              </div>
+              <div className="opacity-90 mt-0.5">{inspection.message}</div>
+            </div>
+          </div>
+
+          {inspection.plan && (
+            <div className="flex flex-wrap items-center gap-2 font-mono text-[11px] text-bone/70 bg-pure border border-bone/10 px-3 py-2">
+              <span className="text-electric font-bold">[ PLAN: {inspection.plan.type} ]</span>
+              {inspection.plan.tier && <span className="border border-bone/20 px-1.5 py-0.5">Tier: {inspection.plan.tier}</span>}
+              <span className="text-bone/40">·</span>
+              <span>{inspection.models.length} modelos habilitados</span>
+            </div>
+          )}
         </div>
       )}
-      <p className="font-mono text-[11px] text-bone/30 mt-3">
-        {"> comprueba que el endpoint del proveedor responde. Sin credenciales reales el resultado solo indica conectividad."}
+
+      <p className="font-mono text-[11px] text-bone/40">
+        {"> Realiza una consulta directa con la credencial del token para validar conectividad, cuota activa y modelos habilitados."}
       </p>
     </div>
   );

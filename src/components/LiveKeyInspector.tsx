@@ -13,6 +13,7 @@ import {
   Coins,
   ShieldCheck,
   Layers,
+  Sparkles,
 } from "lucide-react";
 
 interface LiveKeyInspectorProps {
@@ -134,6 +135,78 @@ export function LiveKeyInspector({ tokenId, tokenName, provider }: LiveKeyInspec
               Verificado: {new Date(inspection.checkedAt).toLocaleTimeString()}
             </div>
           </div>
+
+          {/* Plan & Capabilities Detected Card */}
+          {inspection.plan && (
+            <div className="border border-electric/30 bg-electric/[0.03] p-5 space-y-4">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-bone/10 pb-3">
+                <div className="flex items-center gap-2">
+                  <Sparkles className="w-4 h-4 text-electric" />
+                  <span className="font-mono text-xs uppercase tracking-wider text-bone font-bold">
+                    Plan & Capacidades Detectadas
+                  </span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className="px-2.5 py-0.5 font-mono text-[11px] font-bold uppercase tracking-wider bg-electric/20 border border-electric/50 text-electric">
+                    {inspection.plan.type}
+                  </span>
+                  {inspection.plan.tier && (
+                    <span className="px-2 py-0.5 font-mono text-[10px] uppercase border border-bone/20 text-bone/70">
+                      Tier: {inspection.plan.tier}
+                    </span>
+                  )}
+                </div>
+              </div>
+
+              <p className="font-mono text-xs text-bone/80 leading-relaxed">
+                {inspection.plan.description}
+              </p>
+
+              {/* Rate Limits */}
+              {inspection.plan.rateLimits && (
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 pt-1">
+                  {inspection.plan.rateLimits.rpm && (
+                    <div className="border border-bone/15 bg-pure/60 px-3 py-2 font-mono">
+                      <div className="text-[10px] text-bone/40 uppercase">Límite RPM</div>
+                      <div className="text-xs text-bone font-bold mt-0.5">{inspection.plan.rateLimits.rpm}</div>
+                    </div>
+                  )}
+                  {inspection.plan.rateLimits.tpm && (
+                    <div className="border border-bone/15 bg-pure/60 px-3 py-2 font-mono">
+                      <div className="text-[10px] text-bone/40 uppercase">Límite TPM</div>
+                      <div className="text-xs text-bone font-bold mt-0.5">{inspection.plan.rateLimits.tpm}</div>
+                    </div>
+                  )}
+                  {inspection.plan.rateLimits.rpd && (
+                    <div className="border border-bone/15 bg-pure/60 px-3 py-2 font-mono">
+                      <div className="text-[10px] text-bone/40 uppercase">Límite RPD</div>
+                      <div className="text-xs text-bone font-bold mt-0.5">{inspection.plan.rateLimits.rpd}</div>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Capabilities checklist */}
+              {inspection.plan.capabilities && inspection.plan.capabilities.length > 0 && (
+                <div className="space-y-1.5 pt-1">
+                  <div className="font-mono text-[10px] text-bone/40 uppercase tracking-wider">
+                    Capacidades & Especificaciones:
+                  </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                    {inspection.plan.capabilities.map((cap, idx) => (
+                      <div
+                        key={idx}
+                        className="flex items-start gap-2 font-mono text-xs text-bone/70 bg-pure/40 border border-bone/10 p-2"
+                      >
+                        <CheckCircle2 className="w-3.5 h-3.5 text-electric shrink-0 mt-0.5" />
+                        <span>{cap}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
 
           {/* Balance & Quota Card */}
           {inspection.balance && (
