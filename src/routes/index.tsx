@@ -12,6 +12,7 @@ import { useTokens, useDeleteToken, useSetTokenActive } from "../lib/hooks";
 import type { Token } from "../lib/types";
 import { ConfirmDialog, useConfirmDialog } from "../components/ConfirmDialog";
 import { TotpSetup } from "../components/TotpSetup";
+import { CopyKeyButton } from "../components/CopyKeyButton";
 import { Trash2, Eye, Pause, Play, Download, Search } from "lucide-react";
 
 export const Route = createFileRoute("/")({
@@ -124,9 +125,17 @@ function Dashboard() {
     {
       accessorKey: "maskedValue",
       header: "API Key",
-      cell: (info) => (
-        <code className="font-mono text-xs text-bone/60">{info.getValue()}</code>
-      ),
+      cell: (info) => {
+        const token = info.row.original;
+        return (
+          <div className="flex items-center gap-1.5">
+            <code className="font-mono text-xs text-bone/70 select-all font-medium">
+              {info.getValue() as string}
+            </code>
+            <CopyKeyButton tokenId={token.id} variant="icon" />
+          </div>
+        );
+      },
     },
     {
       accessorKey: "quota",

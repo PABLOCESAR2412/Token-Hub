@@ -267,4 +267,33 @@ export const syncHistoricalUsage = createServerFn({ method: "POST" })
     return { ok: true, days, totalTokens, totalCost };
   });
 
+export const copyTokenKey = createServerFn({ method: "POST" })
+  .validator((tokenId: string) => tokenId)
+  .handler(async ({ data: tokenId }) => {
+    if (!isAuthorized(getRequest())) return unauthorizedResponse();
+    const adapter = await loadAdapter();
+    const token = await adapter.getToken(tokenId);
+    if (!token) throw new Error("Token no encontrado");
+
+    const { decrypt } = await import("../lib/crypto");
+    let key = "";
+    try {
+      key = decrypt(token.encryptedValue);
+    } catch {
+      key = token.encryptedValue.replace(/^enc_/, "");
+    }
+
+    try {
+      await adapter.addAudit({
+        tokenId: token.id,
+        tokenName: token.name,
+        action: "copy",
+        detail: "// API Key copiada al portapapeles",
+      });
+    } catch {}
+
+    return { key };
+  });
+
+
 

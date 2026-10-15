@@ -2,6 +2,7 @@ import { createFileRoute, Link, useRouter } from "@tanstack/react-router";
 import { useToken, useDeleteToken, useAddSnapshot, useUpdateToken, useTotpStatus, useSetTokenActive, useAuditLog, useSyncHistoricalUsage, useInspectToken } from "../../lib/hooks";
 import { RevealKey } from "../../components/RevealKey";
 import { LiveKeyInspector } from "../../components/LiveKeyInspector";
+import { CopyKeyButton } from "../../components/CopyKeyButton";
 import { ConfirmDialog, useConfirmDialog } from "../../components/ConfirmDialog";
 import { PROVIDER_CATALOG } from "../../lib/providers/catalog";
 import { getProviderGuide, providerHasAnalytics, providerVisibleFields, TAGS_HINT } from "../../lib/providers/guides";
@@ -26,6 +27,7 @@ import {
   CheckCircle2,
   AlertTriangle,
   XCircle,
+  Key,
 } from "lucide-react";
 import * as React from "react";
 
@@ -206,11 +208,29 @@ function TokenDetail() {
         </div>
       </div>
 
-      <div className="bg-pure/40 border border-bone/20 p-5">
-        <div className="font-mono text-xs text-bone/50 uppercase mb-2">[ API Key ]</div>
-        <code className="font-mono text-sm">{token.maskedValue}</code>
-        <div className="font-mono text-sm text-bone/50 mt-2">
-          Cuota: {token.quota === 0 ? "Ilimitada" : token.quota.toLocaleString()}
+      <div className="bg-pure/40 border border-bone/20 p-5 space-y-3">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2 font-mono text-xs text-bone/50 uppercase">
+            <Key size={13} className="text-electric" />
+            <span>[ API Key ]</span>
+          </div>
+          <span className="font-mono text-[10px] text-bone/40 uppercase">// Clave abreviada</span>
+        </div>
+
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-pure p-3 border border-bone/10">
+          <code className="font-mono text-sm text-bone font-medium tracking-wide truncate">
+            {token.maskedValue}
+          </code>
+          <CopyKeyButton tokenId={token.id} label="Copiar Key" />
+        </div>
+
+        <div className="flex flex-wrap items-center justify-between text-xs font-mono text-bone/50 pt-1">
+          <span>Cuota: {token.quota === 0 ? "Ilimitada" : token.quota.toLocaleString()}</span>
+          {token.agent && (
+            <span>
+              Agente: <strong className="text-electric">{token.agent}</strong>
+            </span>
+          )}
         </div>
       </div>
 
@@ -534,6 +554,7 @@ function AuditCard({ audit }: { audit: Array<{ id: string; action: string; token
     pause: "text-red-400",
     activate: "text-emerald-400",
     cap_exceeded: "text-amber-400",
+    copy: "text-electric",
   };
   return (
     <div className="bg-pure/40 border border-bone/20 p-5">

@@ -334,4 +334,20 @@ export function useSyncHistoricalUsage() {
   });
 }
 
+export function useCopyTokenKey() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (tokenId: string): Promise<string> => {
+      const fns = await getServerFns();
+      const res = (await callServer(() => fns.copyTokenKey({ data: tokenId }))) as { key: string };
+      if (!res?.key) throw new Error("No se pudo obtener la clave");
+      return res.key;
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["audit"] });
+    },
+  });
+}
+
+
 
