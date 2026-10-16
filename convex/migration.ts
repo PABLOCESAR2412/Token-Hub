@@ -35,6 +35,7 @@ export const importSupabaseData = mutation({
         trackingKey: v.optional(v.union(v.string(), v.null())),
         baseUrl: v.optional(v.union(v.string(), v.null())),
         notes: v.optional(v.union(v.string(), v.null())),
+        fallbackTokenId: v.optional(v.union(v.string(), v.null())),
         createdAt: v.string(),
       })
     ),
