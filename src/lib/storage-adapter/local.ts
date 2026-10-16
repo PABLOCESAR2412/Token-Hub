@@ -199,6 +199,9 @@ export const localAdapter: StorageAdapter = {
       ...(input.trackingKey ? { trackingKey: "enc_" + input.trackingKey } : {}),
       ...(input.baseUrl ? { baseUrl: input.baseUrl } : {}),
       ...(input.notes ? { notes: input.notes } : {}),
+      ...(input.fallbackTokenId ? { fallbackTokenId: input.fallbackTokenId } : {}),
+      ...(input.planId ? { planId: input.planId } : {}),
+      ...(input.selectedModels ? { selectedModels: input.selectedModels } : {}),
     };
     tokens.push(newToken);
     localStorage.setItem(TOKENS_KEY, JSON.stringify(tokens));
@@ -235,6 +238,9 @@ export const localAdapter: StorageAdapter = {
     }
     if (input.baseUrl !== undefined) tokens[idx].baseUrl = input.baseUrl ?? null;
     if (input.notes !== undefined) tokens[idx].notes = input.notes ?? null;
+    if (input.fallbackTokenId !== undefined) tokens[idx].fallbackTokenId = input.fallbackTokenId ?? null;
+    if (input.planId !== undefined) tokens[idx].planId = input.planId ?? null;
+    if (input.selectedModels !== undefined) tokens[idx].selectedModels = input.selectedModels;
     if (input.active !== undefined) tokens[idx].active = input.active;
     if (input.maxUsd !== undefined) tokens[idx].maxUsd = input.maxUsd ?? null;
     if (input.tags !== undefined) tokens[idx].tags = input.tags;

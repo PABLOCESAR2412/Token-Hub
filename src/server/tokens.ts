@@ -515,10 +515,11 @@ export const syncTokenUsage = createServerFn({ method: "POST" })
     } else {
       const tokensUsed = Math.floor(12_000 + Math.random() * 18_000);
       const cost = Number((tokensUsed * 0.000002).toFixed(4));
+      const modelCandidate = data.forceModel || (token.selectedModels && token.selectedModels.length > 0 ? token.selectedModels[0] : `${token.provider}/default`);
       await adapter.addSnapshot(token.id, {
         tokensUsed,
         cost,
-        model: data.forceModel || `${token.provider}/default`,
+        model: modelCandidate,
         inputTokens: Math.round(tokensUsed * 0.7),
         outputTokens: Math.round(tokensUsed * 0.3),
         provider: token.provider,

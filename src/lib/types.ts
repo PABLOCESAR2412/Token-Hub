@@ -32,6 +32,8 @@ export interface Token {
   tags: string[];
   agent?: string | null;
   fallbackTokenId?: string | null;
+  planId?: string | null;
+  selectedModels?: string[];
 }
 
 export interface TokenAudit {
@@ -78,6 +80,8 @@ export type CreateTokenInput = {
   tags?: string[];
   agent?: string;
   fallbackTokenId?: string | null;
+  planId?: string | null;
+  selectedModels?: string[];
 };
 
 export type UpdateTokenInput = {
@@ -96,6 +100,8 @@ export type UpdateTokenInput = {
   tags?: string[];
   agent?: string | null;
   fallbackTokenId?: string | null;
+  planId?: string | null;
+  selectedModels?: string[];
 };
 
 export interface TelegramSettings {

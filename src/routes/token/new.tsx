@@ -8,6 +8,7 @@ import {
   TAGS_HINT,
 } from "../../lib/providers/guides";
 import { ProviderHelpDialog, ProviderHelpTrigger } from "../../components/ProviderHelp";
+import { getPlansForProvider } from "../../lib/providers/plans";
 import * as React from "react";
 import { ArrowLeft, BarChart2, XCircle } from "lucide-react";
 
@@ -33,6 +34,7 @@ function TokenForm() {
     agent: "",
     maxUsd: "",
     fallbackTokenId: "",
+    planId: getPlansForProvider("openrouter")[0]?.id || "",
   });
   const [error, setError] = React.useState("");
   const [showHelp, setShowHelp] = React.useState(false);
@@ -79,6 +81,8 @@ function TokenForm() {
         ...(form.agent.trim() ? { agent: form.agent.trim() } : {}),
         ...(form.maxUsd.trim() ? { maxUsd: parseFloat(form.maxUsd) || undefined } : {}),
         ...(form.fallbackTokenId ? { fallbackTokenId: form.fallbackTokenId } : {}),
+        ...(form.planId ? { planId: form.planId } : {}),
+        selectedModels: (getPlansForProvider(form.provider).find((p) => p.id === form.planId) || getPlansForProvider(form.provider)[0])?.models.map((m) => m.id) || [],
       },
       {
         onSuccess: () => navigate({ to: "/" }),
@@ -132,7 +136,11 @@ function TokenForm() {
           </div>
           <select
             value={form.provider}
-            onChange={(e) => setForm({ ...form, provider: e.target.value })}
+            onChange={(e) => {
+              const newProv = e.target.value;
+              const plans = getPlansForProvider(newProv);
+              setForm({ ...form, provider: newProv, planId: plans[0]?.id || "" });
+            }}
             className={inputClass + " uppercase"}
           >
             {PROVIDER_CATALOG.map((p) => (
@@ -153,6 +161,27 @@ function TokenForm() {
               ? "Analiticas disponibles para este proveedor."
               : "AVISO: este proveedor no expone analiticas de uso."}
           </div>
+        </div>
+
+        <div>
+          <label className="block font-mono text-xs uppercase text-bone/50 mb-2">
+            [ Plan / Nivel de Cuenta ]
+          </label>
+          <select
+            value={form.planId}
+            onChange={(e) => setForm({ ...form, planId: e.target.value })}
+            className={inputClass}
+          >
+            {getPlansForProvider(form.provider).map((pl) => (
+              <option key={pl.id} value={pl.id}>
+                {pl.name} ({pl.limits.rpm} · {pl.limits.tpm})
+              </option>
+            ))}
+          </select>
+          <p className="font-mono text-xs text-bone/50 mt-1.5 leading-relaxed">
+            {getPlansForProvider(form.provider).find((p) => p.id === form.planId)?.description ||
+              "Límites operativos exactos para este proveedor."}
+          </p>
         </div>
 
         <div>

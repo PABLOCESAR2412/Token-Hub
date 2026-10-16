@@ -1,9 +1,11 @@
 import * as React from "react";
 import type { CapacityMetrics } from "../lib/providers/inspector";
+import { getPlanById } from "../lib/providers/plans";
 import { Gauge, Clock, Zap, ShieldAlert, Cpu, Layers, AlertCircle, HelpCircle } from "lucide-react";
 
 interface QuotaCapacityGaugeCardProps {
   provider: string;
+  planId?: string | null;
   capacityMetrics?: CapacityMetrics;
   balance?: any;
   totalCost: number;
@@ -14,6 +16,7 @@ interface QuotaCapacityGaugeCardProps {
 
 export function QuotaCapacityGaugeCard({
   provider,
+  planId,
   capacityMetrics,
   balance,
   totalCost,
@@ -21,6 +24,7 @@ export function QuotaCapacityGaugeCard({
   quota,
   tokensUsed,
 }: QuotaCapacityGaugeCardProps) {
+  const plan = React.useMemo(() => (planId ? getPlanById(provider, planId) : null), [provider, planId]);
   const fiveHourPct = capacityMetrics?.fiveHourWindowPercent ?? 95;
   const dailyPct = capacityMetrics?.dailyWindowPercent ?? 90;
   const weeklyPct = capacityMetrics?.weeklyBudgetPercent ?? 88;
@@ -137,41 +141,41 @@ export function QuotaCapacityGaugeCard({
         <div className="border border-bone/10 bg-pure p-3">
           <div className="font-mono text-[10px] text-bone/40 uppercase">Tokens por Minuto (TPM)</div>
           <div className="font-mono text-sm font-bold text-bone mt-1 truncate">
-            {capacityMetrics?.tpm || "Sin límite"}
+            {plan?.limits.tpm || capacityMetrics?.tpm || "Sin límite"}
           </div>
         </div>
 
         <div className="border border-bone/10 bg-pure p-3">
           <div className="font-mono text-[10px] text-bone/40 uppercase">Peticiones por Minuto (RPM)</div>
           <div className="font-mono text-sm font-bold text-bone mt-1 truncate">
-            {capacityMetrics?.rpm || "Sin límite"}
+            {plan?.limits.rpm || capacityMetrics?.rpm || "Sin límite"}
           </div>
         </div>
 
         <div className="border border-bone/10 bg-pure p-3">
           <div className="font-mono text-[10px] text-bone/40 uppercase">Límite Diario (RPD)</div>
           <div className="font-mono text-sm font-bold text-amber-300 mt-1 truncate">
-            {capacityMetrics?.rpd || "Ilimitado"}
+            {plan?.limits.rpd || capacityMetrics?.rpd || "Ilimitado"}
           </div>
         </div>
 
         <div className="border border-bone/10 bg-pure p-3">
           <div className="font-mono text-[10px] text-bone/40 uppercase">Tokens Restantes Estimados</div>
           <div className="font-mono text-sm font-bold text-electric mt-1 truncate">
-            {capacityMetrics?.remainingTokensEstimated || "Facturación Continua"}
+            {capacityMetrics?.remainingTokensEstimated || (plan?.isFree ? "Cuota Gratuita" : "Facturación Continua")}
           </div>
         </div>
       </div>
 
       {/* Provider Architecture Breakdown Explanation Box */}
-      {capacityMetrics?.providerArchitectureNote && (
+      {(plan?.description || capacityMetrics?.providerArchitectureNote) && (
         <div className="border border-bone/15 bg-bone/[0.02] p-4 space-y-2">
           <div className="flex items-center gap-2 font-mono text-xs font-bold uppercase text-bone/80">
             <Cpu size={13} className="text-electric" />
-            <span>¿Cómo funcionan las cuotas y límites en {provider}?</span>
+            <span>¿Cómo funcionan las cuotas y límites en {provider}? {plan ? `(${plan.name})` : ""}</span>
           </div>
           <p className="font-mono text-xs text-bone/70 leading-relaxed">
-            {capacityMetrics.providerArchitectureNote}
+            {plan?.description || capacityMetrics?.providerArchitectureNote}
           </p>
         </div>
       )}

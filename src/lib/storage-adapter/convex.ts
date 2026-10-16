@@ -121,6 +121,8 @@ async function mapToken(db: any): Promise<Token> {
     tags: db.tags ?? [],
     agent: db.agent ?? null,
     fallbackTokenId: db.fallbackTokenId ?? null,
+    planId: db.planId ?? null,
+    selectedModels: db.selectedModels ?? [],
   };
 }
 
@@ -211,6 +213,8 @@ export const convexAdapter: StorageAdapter = {
       baseUrl: input.baseUrl ?? null,
       notes: input.notes ?? null,
       fallbackTokenId: input.fallbackTokenId ?? null,
+      planId: input.planId ?? null,
+      selectedModels: input.selectedModels ?? [],
       createdAt,
     });
 
@@ -243,6 +247,8 @@ export const convexAdapter: StorageAdapter = {
     if (input.baseUrl !== undefined) patches.baseUrl = input.baseUrl ?? null;
     if (input.notes !== undefined) patches.notes = input.notes ?? null;
     if (input.fallbackTokenId !== undefined) patches.fallbackTokenId = input.fallbackTokenId ?? null;
+    if (input.planId !== undefined) patches.planId = input.planId ?? null;
+    if (input.selectedModels !== undefined) patches.selectedModels = input.selectedModels;
     if (input.active !== undefined) patches.active = input.active;
     if (input.maxUsd !== undefined) patches.maxUsd = input.maxUsd ?? null;
     if (input.tags !== undefined) patches.tags = input.tags;

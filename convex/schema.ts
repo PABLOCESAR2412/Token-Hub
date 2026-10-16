@@ -33,6 +33,8 @@ export default defineSchema({
     baseUrl: v.optional(v.union(v.string(), v.null())),
     notes: v.optional(v.union(v.string(), v.null())),
     fallbackTokenId: v.optional(v.union(v.string(), v.null())),
+    planId: v.optional(v.union(v.string(), v.null())),
+    selectedModels: v.optional(v.union(v.array(v.string()), v.null())),
     createdAt: v.string(),
   })
     .index("by_tokenId", ["tokenId"])

@@ -2,6 +2,7 @@ import { createFileRoute, Link, useRouter } from "@tanstack/react-router";
 import { useToken, useTokens, useDeleteToken, useAddSnapshot, useUpdateToken, useTotpStatus, useSetTokenActive, useAuditLog, useSyncHistoricalUsage, useInspectToken, useSyncTokenUsage } from "../../lib/hooks";
 import { RevealKey } from "../../components/RevealKey";
 import { LiveKeyInspector } from "../../components/LiveKeyInspector";
+import { ProviderPlanSelector } from "../../components/ProviderPlanSelector";
 import { CopyKeyButton } from "../../components/CopyKeyButton";
 import { ConfirmDialog, useConfirmDialog } from "../../components/ConfirmDialog";
 import { QuotaCapacityGaugeCard } from "../../components/QuotaCapacityGaugeCard";
@@ -277,8 +278,25 @@ function TokenDetail() {
 
       <LiveKeyInspector tokenId={token.id} tokenName={token.name} provider={token.provider} />
 
+      <ProviderPlanSelector
+        tokenId={token.id}
+        provider={token.provider}
+        currentPlanId={token.planId}
+        currentSelectedModels={token.selectedModels}
+        detectedPlan={inspection?.plan}
+        isSaving={updateToken.isPending}
+        onSave={(planId, selectedModels) => {
+          updateToken.mutate({
+            id: token.id,
+            planId,
+            selectedModels,
+          });
+        }}
+      />
+
       <QuotaCapacityGaugeCard
         provider={token.provider}
+        planId={token.planId}
         capacityMetrics={inspection?.capacityMetrics}
         balance={inspection?.balance}
         totalCost={token.totalCost}

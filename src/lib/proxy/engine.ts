@@ -55,7 +55,9 @@ export function buildTargetForToken(token: Token, modelRequested: string): Upstr
 
   // If "default" or if model is from another provider family, adapt model intelligently
   if (cleanModel === "default" || !cleanModel) {
-    if (p === "jev" || p === "typesafe") cleanModel = "typesafe/jev-latest";
+    if (token.selectedModels && token.selectedModels.length > 0) {
+      cleanModel = token.selectedModels[0];
+    } else if (p === "jev" || p === "typesafe") cleanModel = "typesafe/jev-latest";
     else if (p === "groq") cleanModel = "llama-3.3-70b-versatile";
     else if (p === "deepseek") cleanModel = "deepseek-chat";
     else if (p === "google" || p === "gemini") cleanModel = "gemini-4-argon";
