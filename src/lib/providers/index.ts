@@ -4,6 +4,7 @@ import { nvidiaProvider } from "./nvidia";
 import { opencodeZenProvider } from "./opencode-zen";
 import { openRouterProvider } from "./openrouter";
 import { langfuseProvider } from "./langfuse";
+import { jevProvider } from "./jev";
 import { makeStaticProvider } from "./generic";
 
 export interface ModelUsage {
@@ -38,6 +39,7 @@ export interface ProviderAdapter {
 }
 
 const realAdapters: ProviderAdapter[] = [
+  jevProvider,
   openRouterProvider,
   googleProvider,
   nvidiaProvider,

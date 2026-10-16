@@ -31,6 +31,10 @@ export const Route = createFileRoute("/api/v1/models")({
 
           // Common aliases
           modelsList.push(
+            { id: "typesafe/jev-latest", object: "model", created: now, owned_by: "jev" },
+            { id: "typesafe/jev-1.14", object: "model", created: now, owned_by: "jev" },
+            { id: "typesafe/jev-router", object: "model", created: now, owned_by: "jev" },
+            { id: "google/gemini-4-argon", object: "model", created: now, owned_by: "google" },
             { id: "deepseek/deepseek-chat", object: "model", created: now, owned_by: "deepseek" },
             { id: "google/gemini-2.5-flash", object: "model", created: now, owned_by: "google" },
             { id: "groq/llama-3.3-70b-versatile", object: "model", created: now, owned_by: "groq" },

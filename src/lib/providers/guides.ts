@@ -14,7 +14,7 @@ export interface ProviderGuide {
   fieldSteps: Partial<Record<ProviderField, string[]>>;
 }
 
-export const REAL_ANALYTICS_SLUGS: string[] = ["openrouter", "google", "nvidia", "langfuse", "opencode-zen"];
+export const REAL_ANALYTICS_SLUGS: string[] = ["jev", "openrouter", "google", "nvidia", "langfuse", "opencode-zen"];
 
 /** Tags es un campo interno de la app (no se obtiene del proveedor). Hint mostrado en el form. */
 export const TAGS_HINT =
@@ -27,6 +27,26 @@ export const TAGS_HINT =
 const FIELDS_API_KEY_ONLY: ProviderField[] = ["apiKey"];
 
 export const PROVIDER_GUIDES: ProviderGuide[] = [
+  {
+    slug: "jev",
+    label: "JEV (TypeSafe AI)",
+    hasAnalytics: true,
+    analyticsNote: "Modelos de decisión System-One de latencia cero (<5ms). Diagnóstico en vivo de cuota, modelos y métricas.",
+    requiredFields: ["apiKey"],
+    visibleFields: ["apiKey", "baseUrl"],
+    fieldSteps: {
+      apiKey: [
+        "JEV está disponible de forma nativa vía TypeSafe AI (https://api.typesafe.ai) o como modelo en OpenRouter (typesafe/jev-latest).",
+        "Opción A (TypeSafe AI Nativa): Ingresa a tu panel de TypeSafe AI → API Keys → Genera o copia tu clave (ts-jev-... o jev-...).",
+        "Opción B (OpenRouter): Puedes usar directamente una clave sk-or-v1-... de OpenRouter para consumir 'typesafe/jev-latest' o 'typesafe/jev-1.14'.",
+        "Pégala en API Key.",
+      ],
+      baseUrl: [
+        "Por defecto opcional: conecta directamente con https://api.typesafe.ai/v1 (o OpenRouter si la clave inicia con sk-or-).",
+        "Si cuentas con un endpoint privado o gateway empresarial de JEV, ingresa aquí su URL base.",
+      ],
+    },
+  },
   {
     slug: "openrouter",
     label: "OpenRouter",

@@ -33,6 +33,8 @@ const COST_ESTIMATES_PER_1M: Record<string, { prompt: number; completion: number
   "gemini-2.5-flash": { prompt: 0.15, completion: 0.6 },
   "gemini-2.0-flash": { prompt: 0.1, completion: 0.4 },
   "gemini-1.5-pro": { prompt: 1.25, completion: 5.0 },
+  "typesafe/jev": { prompt: 0.042, completion: 0.042 },
+  jev: { prompt: 0.042, completion: 0.042 },
   default: { prompt: 0.5, completion: 1.5 },
 };
 
@@ -53,7 +55,8 @@ export function buildTargetForToken(token: Token, modelRequested: string): Upstr
 
   // If "default" or if model is from another provider family, adapt model intelligently
   if (cleanModel === "default" || !cleanModel) {
-    if (p === "groq") cleanModel = "llama-3.3-70b-versatile";
+    if (p === "jev" || p === "typesafe") cleanModel = "typesafe/jev-latest";
+    else if (p === "groq") cleanModel = "llama-3.3-70b-versatile";
     else if (p === "deepseek") cleanModel = "deepseek-chat";
     else if (p === "google" || p === "gemini") cleanModel = "gemini-4-argon";
     else if (p === "openrouter") cleanModel = "google/gemini-2.0-flash-lite-preview-02-05:free";
@@ -61,7 +64,9 @@ export function buildTargetForToken(token: Token, modelRequested: string): Upstr
     else cleanModel = "gpt-4o-mini";
   } else {
     // If fallback switched to a provider with non-compatible model names, pick equivalent
-    if (p === "groq" && (cleanModel.includes("gemini") || cleanModel.includes("gpt") || cleanModel.includes("claude"))) {
+    if ((p === "jev" || p === "typesafe") && !cleanModel.includes("jev")) {
+      cleanModel = "typesafe/jev-latest";
+    } else if (p === "groq" && (cleanModel.includes("gemini") || cleanModel.includes("gpt") || cleanModel.includes("claude"))) {
       cleanModel = "llama-3.3-70b-versatile";
     } else if (p === "google" || p === "gemini") {
       if (cleanModel.toLowerCase().includes("argon")) {
@@ -83,7 +88,17 @@ export function buildTargetForToken(token: Token, modelRequested: string): Upstr
     "Content-Type": "application/json",
   };
 
-  if (p === "openrouter") {
+  if (p === "jev" || p === "typesafe") {
+    url = token.baseUrl
+      ? `${token.baseUrl.replace(/\/+$/, "")}/chat/completions`
+      : decryptedKey.startsWith("sk-or-")
+      ? "https://openrouter.ai/api/v1/chat/completions"
+      : "https://api.typesafe.ai/v1/chat/completions";
+    if (decryptedKey.startsWith("sk-or-")) {
+      headers["HTTP-Referer"] = "https://token-hub-two.vercel.app";
+      headers["X-Title"] = "Agent Token Hub";
+    }
+  } else if (p === "openrouter") {
     url = "https://openrouter.ai/api/v1/chat/completions";
     headers["HTTP-Referer"] = "https://token-hub-two.vercel.app";
     headers["X-Title"] = "Agent Token Hub";
@@ -210,7 +225,9 @@ export async function resolveUpstreamTarget(
   // If still not matched, route by model name keyword
   if (!selectedToken) {
     const q = cleanModel.toLowerCase();
-    if (q.includes("deepseek")) {
+    if (q.includes("jev") || q.includes("typesafe")) {
+      selectedToken = allTokens.find((t) => t.provider === "jev") || null;
+    } else if (q.includes("deepseek")) {
       selectedToken = allTokens.find((t) => t.provider === "deepseek") || null;
     } else if (q.includes("gemini")) {
       selectedToken = allTokens.find((t) => t.provider === "google") || null;

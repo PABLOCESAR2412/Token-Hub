@@ -634,7 +634,8 @@ function AuditCard({ audit }: { audit: Array<{ id: string; action: string; token
 }
 
 const SUGGESTED_MODELS_MAP: Record<string, string[]> = {
-  google: ["gemini-2.5-pro", "gemini-2.5-flash", "gemini-2.0-flash", "gemini-1.5-pro", "gemini-1.5-flash"],
+  jev: ["typesafe/jev-latest", "typesafe/jev-1.14", "typesafe/jev-router"],
+  google: ["gemini-4-argon", "gemini-2.5-pro", "gemini-2.5-flash", "gemini-2.0-flash", "gemini-1.5-pro", "gemini-1.5-flash"],
   openai: ["gpt-4o", "gpt-4o-mini", "o1", "o1-mini", "o3-mini", "gpt-4-turbo"],
   openrouter: ["anthropic/claude-3.5-sonnet", "deepseek/deepseek-r1", "meta-llama/llama-3.3-70b-instruct", "openai/gpt-4o"],
   groq: ["llama-3.3-70b-versatile", "llama-3.1-8b-instant", "deepseek-r1-distill-llama-70b"],

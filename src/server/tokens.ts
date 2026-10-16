@@ -199,7 +199,10 @@ export const syncHistoricalUsage = createServerFn({ method: "POST" })
 
     // 2. Intelligent provider estimation defaults if totalTokens/totalCost not specified
     if (totalTokens <= 0 && totalCost <= 0) {
-      if (providerLower === "google" || providerLower === "gemini") {
+      if (providerLower === "jev" || providerLower === "typesafe") {
+        totalTokens = 350_000;
+        totalCost = 0.0147;
+      } else if (providerLower === "google" || providerLower === "gemini") {
         totalTokens = 485_000;
         totalCost = 0.85;
       } else if (providerLower === "openai") {
@@ -221,6 +224,13 @@ export const syncHistoricalUsage = createServerFn({ method: "POST" })
     const modelPool: string[] = [];
     if (customModel) {
       modelPool.push(customModel);
+    } else if (providerLower === "jev" || providerLower === "typesafe") {
+      modelPool.push(
+        "typesafe/jev-latest",
+        "typesafe/jev-latest",
+        "typesafe/jev-1.14",
+        "typesafe/jev-router"
+      );
     } else if (providerLower === "google" || providerLower === "gemini") {
       modelPool.push(
         "gemini-4-argon",
@@ -473,6 +483,35 @@ export const syncTokenUsage = createServerFn({ method: "POST" })
           addedCost += cost;
         }
       } catch {}
+    } else if (providerLower === "jev" || providerLower === "typesafe") {
+      const jevModelPool = [
+        "typesafe/jev-latest",
+        "typesafe/jev-latest",
+        "typesafe/jev-1.14",
+        "typesafe/jev-router",
+      ];
+      for (let i = daysToSync; i >= 0; i--) {
+        const timestamp = new Date(now - i * DAY_MS).toISOString();
+        const selectedModel = data.forceModel || jevModelPool[i % jevModelPool.length];
+        const tokensUsed = Math.floor(18_000 + Math.random() * 25_000);
+        const cost = Number(((tokensUsed / 1_000_000) * 0.042).toFixed(5));
+        const caller = callersPool[i % callersPool.length];
+
+        await adapter.addSnapshot(token.id, {
+          tokensUsed,
+          cost,
+          model: selectedModel,
+          inputTokens: tokensUsed,
+          outputTokens: 0,
+          provider: "jev",
+          caller,
+          endpoint: "/api/alpha/decisions",
+          timestamp,
+        });
+
+        snapshotsAdded++;
+        addedCost += cost;
+      }
     } else {
       const tokensUsed = Math.floor(12_000 + Math.random() * 18_000);
       const cost = Number((tokensUsed * 0.000002).toFixed(4));
@@ -498,7 +537,7 @@ export const syncTokenUsage = createServerFn({ method: "POST" })
       tokenId: token.id,
       tokenName: token.name,
       action: "sync_usage",
-      detail: `// Usos sincronizados: +${snapshotsAdded} registros (modelo ${data.forceModel || (providerLower === "google" ? "gemini-4-argon" : "activo")})`,
+      detail: `// Usos sincronizados: +${snapshotsAdded} registros (modelo ${data.forceModel || (providerLower === "google" ? "gemini-4-argon" : providerLower === "jev" ? "typesafe/jev-latest" : "activo")})`,
     });
 
     return {

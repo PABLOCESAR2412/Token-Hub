@@ -5,6 +5,7 @@ export interface ProviderInfo {
 }
 
 export const PROVIDER_CATALOG: ProviderInfo[] = [
+  { slug: "jev", label: "JEV (TypeSafe AI)", description: "Modelos de decisión System-One, clasificación y routing ultrarrápido (<5ms)" },
   { slug: "openrouter", label: "OpenRouter", description: "Gateway multi-model (Claude, GPT, Llama y más)" },
   { slug: "openai", label: "OpenAI", description: "GPT-4o, o-series, embeddings" },
   { slug: "anthropic", label: "Anthropic Claude", description: "Claude Opus/Sonnet/Haiku" },
