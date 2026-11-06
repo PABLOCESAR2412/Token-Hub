@@ -37,7 +37,7 @@ export const Route = createFileRoute("/api/v1/chat/completions")({
           return Response.json(
             {
               error: {
-                message: err.message || "Internal gateway proxy error",
+                message: isUnauthorized ? "Unauthorized" : "Internal gateway proxy error",
                 type: isUnauthorized ? "invalid_request_error" : "gateway_error",
                 code: isUnauthorized ? "unauthorized" : undefined,
               },

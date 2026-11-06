@@ -64,7 +64,6 @@ export const Route = createFileRoute("/api/auth/login")({
             hint: mustChangePassword ? "Debes cambiar tu contraseña antes de continuar." : undefined,
           });
         } catch (err: any) {
-          console.error("Error en /api/auth/login:", err);
           const msg = err?.message || "";
           if (msg.includes("Can't reach database") || msg.includes("PrismaClient") || msg.includes("database server")) {
             return Response.json(
@@ -78,8 +77,9 @@ export const Route = createFileRoute("/api/auth/login")({
               { status: 500 }
             );
           }
+          console.error("Error en /api/auth/login:", err?.name || "UnknownError");
           return Response.json(
-            { error: msg || "// Error interno al procesar el login" },
+            { error: "// Error interno al procesar la autenticación" },
             { status: 500 }
           );
         }

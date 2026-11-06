@@ -61,7 +61,7 @@ export const Route = createFileRoute("/api/mcp")({
             {
               jsonrpc: "2.0",
               id: null,
-              error: { code: -32603, message: `Error interno de servidor MCP: ${err.message}` },
+              error: { code: -32603, message: "Error interno del servidor MCP" },
             },
             { status: 500 }
           );

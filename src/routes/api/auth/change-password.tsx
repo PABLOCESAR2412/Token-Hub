@@ -43,8 +43,8 @@ export const Route = createFileRoute("/api/auth/change-password")({
 
           return Response.json({ ok: true });
         } catch (err: any) {
-          console.error("Error en /api/auth/change-password:", err);
-          return Response.json({ error: err?.message || "// Error al cambiar la contraseña" }, { status: 500 });
+          console.error("Error en /api/auth/change-password:", err?.name || "UnknownError");
+          return Response.json({ error: "// Error interno al cambiar la contraseña" }, { status: 500 });
         }
       },
     },

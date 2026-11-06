@@ -77,8 +77,8 @@ export const Route = createFileRoute("/api/auth/forgot-password")({
 
           return Response.json({ ok: true, recovery: true });
         } catch (err: any) {
-          console.error("Error en /api/auth/forgot-password:", err);
-          return Response.json({ error: err?.message || "// Error al procesar recuperación" }, { status: 500 });
+          console.error("Error en /api/auth/forgot-password:", err?.name || "UnknownError");
+          return Response.json({ error: "// Error interno al procesar la recuperación" }, { status: 500 });
         }
       },
     },

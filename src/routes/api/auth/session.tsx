@@ -23,8 +23,8 @@ export const Route = createFileRoute("/api/auth/session")({
             expiresAt: sessionExpiry(token),
           });
         } catch (err: any) {
-          console.error("Error en /api/auth/session:", err);
-          return Response.json({ authed: false, error: err?.message || "Error al verificar sesión" });
+          console.error("Error en /api/auth/session:", err?.name || "UnknownError");
+          return Response.json({ authed: false, error: "Error interno al verificar sesión" }, { status: 500 });
         }
       },
     },

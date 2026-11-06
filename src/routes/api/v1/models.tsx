@@ -118,7 +118,7 @@ export const Route = createFileRoute("/api/v1/models")({
           });
         } catch (err: any) {
           return Response.json(
-            { error: { message: err.message || "Failed to list models" } },
+            { error: { message: "Internal error while listing models" } },
             { status: 500 }
           );
         }

@@ -92,7 +92,7 @@ export const Route = createFileRoute("/api/cron/poll-usage")({
               },
             });
           } catch (err: any) {
-            results.push({ tokenId: token.id, provider: token.provider, success: false, error: err.message });
+            results.push({ tokenId: token.id, provider: token.provider, success: false, error: "No se pudo consultar el uso del proveedor." });
           }
         }
 

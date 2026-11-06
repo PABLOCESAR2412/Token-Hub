@@ -61,7 +61,7 @@ export function LoginScreen() {
                 {"> se requiere autenticación para gestionar tokens"}
               </p>
               <p className="font-mono text-xs text-bone/40 mt-1">
-                {"> primera vez -> admin123 (deberás cambiarla)"}
+                {"> contraseña inicial configurada por el administrador del servidor"}
               </p>
             </div>
           </div>
