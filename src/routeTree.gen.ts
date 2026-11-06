@@ -10,6 +10,10 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as GatewayRouteImport } from './routes/gateway'
+import { Route as ApiGatewayKeysRouteImport } from './routes/api/gateway-keys'
+import { Route as ApiGatewayModelUsageRouteImport } from './routes/api/gateway-model-usage'
+import { Route as ApiHealthRouteImport } from './routes/api/health'
 import { Route as ApiMcpRouteImport } from './routes/api/mcp'
 import { Route as TokenTokenIdRouteImport } from './routes/token/$tokenId'
 import { Route as TokenNewRouteImport } from './routes/token/new'
@@ -27,6 +31,26 @@ import { Route as ApiV1ChatCompletionsRouteImport } from './routes/api/v1/chat/c
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const GatewayRoute = GatewayRouteImport.update({
+  id: '/gateway',
+  path: '/gateway',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiGatewayKeysRoute = ApiGatewayKeysRouteImport.update({
+  id: '/api/gateway-keys',
+  path: '/api/gateway-keys',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiGatewayModelUsageRoute = ApiGatewayModelUsageRouteImport.update({
+  id: '/api/gateway-model-usage',
+  path: '/api/gateway-model-usage',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiHealthRoute = ApiHealthRouteImport.update({
+  id: '/api/health',
+  path: '/api/health',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ApiMcpRoute = ApiMcpRouteImport.update({
@@ -97,6 +121,10 @@ const ApiV1ChatCompletionsRoute = ApiV1ChatCompletionsRouteImport.update({
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/gateway': typeof GatewayRoute
+  '/api/gateway-keys': typeof ApiGatewayKeysRoute
+  '/api/gateway-model-usage': typeof ApiGatewayModelUsageRoute
+  '/api/health': typeof ApiHealthRoute
   '/api/mcp': typeof ApiMcpRouteWithChildren
   '/token/$tokenId': typeof TokenTokenIdRoute
   '/token/new': typeof TokenNewRoute
@@ -113,6 +141,10 @@ export interface FileRoutesByFullPath {
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/gateway': typeof GatewayRoute
+  '/api/gateway-keys': typeof ApiGatewayKeysRoute
+  '/api/gateway-model-usage': typeof ApiGatewayModelUsageRoute
+  '/api/health': typeof ApiHealthRoute
   '/api/mcp': typeof ApiMcpRouteWithChildren
   '/token/$tokenId': typeof TokenTokenIdRoute
   '/token/new': typeof TokenNewRoute
@@ -130,6 +162,10 @@ export interface FileRoutesByTo {
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/gateway': typeof GatewayRoute
+  '/api/gateway-keys': typeof ApiGatewayKeysRoute
+  '/api/gateway-model-usage': typeof ApiGatewayModelUsageRoute
+  '/api/health': typeof ApiHealthRoute
   '/api/mcp': typeof ApiMcpRouteWithChildren
   '/token/$tokenId': typeof TokenTokenIdRoute
   '/token/new': typeof TokenNewRoute
@@ -148,6 +184,10 @@ export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
     | '/'
+    | '/gateway'
+    | '/api/gateway-keys'
+    | '/api/gateway-model-usage'
+    | '/api/health'
     | '/api/mcp'
     | '/token/$tokenId'
     | '/token/new'
@@ -164,6 +204,10 @@ export interface FileRouteTypes {
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
+    | '/gateway'
+    | '/api/gateway-keys'
+    | '/api/gateway-model-usage'
+    | '/api/health'
     | '/api/mcp'
     | '/token/$tokenId'
     | '/token/new'
@@ -180,6 +224,10 @@ export interface FileRouteTypes {
   id:
     | '__root__'
     | '/'
+    | '/gateway'
+    | '/api/gateway-keys'
+    | '/api/gateway-model-usage'
+    | '/api/health'
     | '/api/mcp'
     | '/token/$tokenId'
     | '/token/new'
@@ -197,6 +245,10 @@ export interface FileRouteTypes {
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  GatewayRoute: typeof GatewayRoute
+  ApiGatewayKeysRoute: typeof ApiGatewayKeysRoute
+  ApiGatewayModelUsageRoute: typeof ApiGatewayModelUsageRoute
+  ApiHealthRoute: typeof ApiHealthRoute
   ApiMcpRoute: typeof ApiMcpRouteWithChildren
   TokenTokenIdRoute: typeof TokenTokenIdRoute
   TokenNewRoute: typeof TokenNewRoute
@@ -217,6 +269,34 @@ declare module '@tanstack/react-router' {
       path: '/'
       fullPath: '/'
       preLoaderRoute: typeof IndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/gateway': {
+      id: '/gateway'
+      path: '/gateway'
+      fullPath: '/gateway'
+      preLoaderRoute: typeof GatewayRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/gateway-keys': {
+      id: '/api/gateway-keys'
+      path: '/api/gateway-keys'
+      fullPath: '/api/gateway-keys'
+      preLoaderRoute: typeof ApiGatewayKeysRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/gateway-model-usage': {
+      id: '/api/gateway-model-usage'
+      path: '/api/gateway-model-usage'
+      fullPath: '/api/gateway-model-usage'
+      preLoaderRoute: typeof ApiGatewayModelUsageRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/health': {
+      id: '/api/health'
+      path: '/api/health'
+      fullPath: '/api/health'
+      preLoaderRoute: typeof ApiHealthRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/api/mcp': {
@@ -328,6 +408,10 @@ const ApiMcpRouteWithChildren =
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  GatewayRoute: GatewayRoute,
+  ApiGatewayKeysRoute: ApiGatewayKeysRoute,
+  ApiGatewayModelUsageRoute: ApiGatewayModelUsageRoute,
+  ApiHealthRoute: ApiHealthRoute,
   ApiMcpRoute: ApiMcpRouteWithChildren,
   TokenTokenIdRoute: TokenTokenIdRoute,
   TokenNewRoute: TokenNewRoute,

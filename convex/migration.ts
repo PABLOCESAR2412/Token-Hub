@@ -1,8 +1,10 @@
 import { mutation } from "./_generated/server";
 import { v } from "convex/values";
+import { requireServiceSecret } from "./authz";
 
 export const importSupabaseData = mutation({
   args: {
+    serviceSecret: v.string(),
     authConfig: v.optional(
       v.object({
         passwordHash: v.string(),
@@ -66,6 +68,7 @@ export const importSupabaseData = mutation({
     ),
   },
   handler: async (ctx, args) => {
+    requireServiceSecret(args.serviceSecret);
     // 1. AuthConfig
     if (args.authConfig) {
       const existing = await ctx.db

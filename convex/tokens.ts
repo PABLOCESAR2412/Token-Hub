@@ -1,16 +1,19 @@
 import { query, mutation } from "./_generated/server";
 import { v } from "convex/values";
+import { requireServiceSecret } from "./authz";
 
 export const list = query({
-  args: {},
-  handler: async (ctx) => {
+  args: { serviceSecret: v.string() },
+  handler: async (ctx, args) => {
+    requireServiceSecret(args.serviceSecret);
     return await ctx.db.query("tokens").order("desc").collect();
   },
 });
 
 export const get = query({
-  args: { tokenId: v.string() },
+  args: { serviceSecret: v.string(), tokenId: v.string() },
   handler: async (ctx, args) => {
+    requireServiceSecret(args.serviceSecret);
     const token = await ctx.db
       .query("tokens")
       .withIndex("by_tokenId", (q) => q.eq("tokenId", args.tokenId))
@@ -22,7 +25,7 @@ export const get = query({
       .query("usageSnapshots")
       .withIndex("by_tokenId", (q) => q.eq("tokenId", args.tokenId))
       .order("desc")
-      .collect();
+      .take(300);
 
     return { ...token, snapshots };
   },
@@ -30,6 +33,7 @@ export const get = query({
 
 export const create = mutation({
   args: {
+    serviceSecret: v.string(),
     tokenId: v.string(),
     name: v.string(),
     slug: v.string(),
@@ -53,13 +57,16 @@ export const create = mutation({
     createdAt: v.string(),
   },
   handler: async (ctx, args) => {
-    const id = await ctx.db.insert("tokens", args);
+    requireServiceSecret(args.serviceSecret);
+    const { serviceSecret: _serviceSecret, ...token } = args;
+    const id = await ctx.db.insert("tokens", token);
     return await ctx.db.get(id);
   },
 });
 
 export const update = mutation({
   args: {
+    serviceSecret: v.string(),
     tokenId: v.string(),
     name: v.optional(v.string()),
     provider: v.optional(v.string()),
@@ -77,8 +84,10 @@ export const update = mutation({
     maxUsd: v.optional(v.union(v.number(), v.null())),
     tags: v.optional(v.array(v.string())),
     agent: v.optional(v.union(v.string(), v.null())),
+    totalCost: v.optional(v.number()),
   },
   handler: async (ctx, args) => {
+    requireServiceSecret(args.serviceSecret);
     const token = await ctx.db
       .query("tokens")
       .withIndex("by_tokenId", (q) => q.eq("tokenId", args.tokenId))
@@ -86,7 +95,7 @@ export const update = mutation({
 
     if (!token) throw new Error("Token not found");
 
-    const { tokenId, ...patches } = args;
+    const { serviceSecret: _serviceSecret, tokenId, ...patches } = args;
     await ctx.db.patch(token._id, patches);
     return await ctx.db.get(token._id);
   },
@@ -94,10 +103,12 @@ export const update = mutation({
 
 export const setActive = mutation({
   args: {
+    serviceSecret: v.string(),
     tokenId: v.string(),
     active: v.boolean(),
   },
   handler: async (ctx, args) => {
+    requireServiceSecret(args.serviceSecret);
     const token = await ctx.db
       .query("tokens")
       .withIndex("by_tokenId", (q) => q.eq("tokenId", args.tokenId))
@@ -111,8 +122,9 @@ export const setActive = mutation({
 });
 
 export const remove = mutation({
-  args: { tokenId: v.string() },
+  args: { serviceSecret: v.string(), tokenId: v.string() },
   handler: async (ctx, args) => {
+    requireServiceSecret(args.serviceSecret);
     const token = await ctx.db
       .query("tokens")
       .withIndex("by_tokenId", (q) => q.eq("tokenId", args.tokenId))

@@ -1,8 +1,11 @@
 import { mutation } from "./_generated/server";
+import { v } from "convex/values";
+import { requireServiceSecret } from "./authz";
 
 export const seedInitialData = mutation({
-  args: {},
-  handler: async (ctx) => {
+  args: { serviceSecret: v.string() },
+  handler: async (ctx, args) => {
+    requireServiceSecret(args.serviceSecret);
     const existingTokens = await ctx.db.query("tokens").first();
     if (existingTokens) {
       return { seeded: false, message: "La base de datos ya contiene tokens." };
@@ -14,10 +17,10 @@ export const seedInitialData = mutation({
         name: "OpenAI GPT-4 Agent",
         slug: "openai-gpt-4-agent",
         provider: "openai",
-        encryptedValue: "enc_sk-demo-abc123def456ghi789jkl0mno",
+        encryptedValue: "",
         quota: 10000,
         totalCost: 247.83,
-        active: true,
+        active: false,
         maxUsd: 100,
         tags: ["agente", "gpt"],
         agent: "Dev Agent",
@@ -28,10 +31,10 @@ export const seedInitialData = mutation({
         name: "Anthropic Claude Code",
         slug: "anthropic-claude-code",
         provider: "anthropic",
-        encryptedValue: "enc_sk-ant-demo-pqr456stu789vwx0",
+        encryptedValue: "",
         quota: 5000,
         totalCost: 89.12,
-        active: true,
+        active: false,
         maxUsd: 50,
         tags: ["claude"],
         agent: "Dev Agent",
@@ -42,10 +45,10 @@ export const seedInitialData = mutation({
         name: "OpenAI Embeddings",
         slug: "openai-embeddings",
         provider: "openai",
-        encryptedValue: "enc_sk-demo-emb123fgh456ijk789lmn0",
+        encryptedValue: "",
         quota: 0,
         totalCost: 12.4,
-        active: true,
+        active: false,
         maxUsd: null,
         tags: ["embeddings"],
         agent: "ML Pipeline",

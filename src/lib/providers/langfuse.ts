@@ -80,7 +80,7 @@ async function queryMetrics(ctx: ProviderContext, from: string, to: string): Pro
     cost: daily.reduce((a, d) => a + d.cost, 0),
     daily,
     models,
-    raw: { rows: rows.length },
+    raw: { rows: rows.length, usageSupported: true, usagePeriod: "last_30_days" },
   };
 }
 

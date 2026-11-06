@@ -2,6 +2,13 @@ import { loadAdapter } from "../storage-adapter";
 import { decrypt } from "../crypto";
 import type { Token } from "../types";
 import { sendTelegramAlert } from "../telegram";
+import { computeCacheKey, getCachedResponse, setCachedResponse } from "./cache";
+import { resolveCascadeModel } from "./router";
+import { selectPooledToken } from "./pool";
+import { checkAgentCircuitBreaker } from "./circuit-breaker";
+import { applyDlpToMessages } from "./dlp";
+import { getUnifiedModelGroups } from "./model-groups";
+import { isValidGatewayApiKey } from "../gateway-keys";
 
 export interface ProxyChatRequest {
   model: string;
@@ -17,6 +24,8 @@ export interface UpstreamTarget {
   url: string;
   cleanModel: string;
   headers: Record<string, string>;
+  isUnifiedRoute?: boolean;
+  fallbackTargets?: UpstreamTarget[];
 }
 
 // Rough cost per 1M tokens in USD for estimation
@@ -38,7 +47,7 @@ const COST_ESTIMATES_PER_1M: Record<string, { prompt: number; completion: number
   default: { prompt: 0.5, completion: 1.5 },
 };
 
-function estimateCost(model: string, inputTokens: number, outputTokens: number): number {
+export function estimateCost(model: string, inputTokens: number, outputTokens: number): number {
   const match = Object.keys(COST_ESTIMATES_PER_1M).find((k) =>
     model.toLowerCase().includes(k)
   );
@@ -46,15 +55,23 @@ function estimateCost(model: string, inputTokens: number, outputTokens: number):
   return (inputTokens / 1_000_000) * rate.prompt + (outputTokens / 1_000_000) * rate.completion;
 }
 
+
 /**
  * Builds endpoint URL, headers, and normalized model for any token
  */
 export function buildTargetForToken(token: Token, modelRequested: string): UpstreamTarget {
   let cleanModel = modelRequested || "default";
   const p = token.provider.toLowerCase();
+  const explicitlySelectedModel = token.selectedModels?.find(
+    (model) => model.toLowerCase() === cleanModel.toLowerCase()
+  );
 
-  // If "default" or if model is from another provider family, adapt model intelligently
-  if (cleanModel === "default" || !cleanModel) {
+  // Keep provider-specific model IDs exactly as configured. Only apply the
+  // legacy cross-provider model guessing when the requested model is not an
+  // explicitly selected model for this token.
+  if (explicitlySelectedModel) {
+    cleanModel = explicitlySelectedModel;
+  } else if (cleanModel === "default" || !cleanModel) {
     if (token.selectedModels && token.selectedModels.length > 0) {
       cleanModel = token.selectedModels[0];
     } else if (p === "jev" || p === "typesafe") cleanModel = "typesafe/jev-latest";
@@ -179,12 +196,33 @@ export async function findFallbackCandidate(
   return null;
 }
 
+function findTokenForCredential(tokens: Token[], credential: string): Token | null {
+  if (!credential) return null;
+
+  const directMatch = tokens.find(
+    (token) =>
+      token.slug === credential ||
+      token.id === credential ||
+      token.name.toLowerCase() === credential.toLowerCase()
+  );
+  if (directMatch) return directMatch;
+
+  for (const token of tokens) {
+    try {
+      if (decrypt(token.encryptedValue) === credential) return token;
+    } catch {}
+  }
+  return null;
+}
+
 /**
  * Resolves the matching token and upstream endpoint based on incoming token / auth / model
  */
 export async function resolveUpstreamTarget(
   authHeader: string | null,
-  modelRequested: string
+  modelRequested: string,
+  cookieHeader?: string | null,
+  messages?: Array<{ role: string; content: any }>
 ): Promise<UpstreamTarget> {
   const adapter = await loadAdapter();
   const allTokens = await adapter.getTokens();
@@ -194,61 +232,123 @@ export async function resolveUpstreamTarget(
   }
 
   const rawKey = authHeader?.replace(/^Bearer\s+/i, "").trim() || "";
+  const masterPassword = process.env.AUTH_PASSWORD?.trim();
+  const gatewayKey = process.env.GATEWAY_KEY?.trim() || process.env.GATEWAY_SECRET?.trim();
+  const isConfiguredMasterKey =
+    Boolean(rawKey) &&
+    ((Boolean(masterPassword) && rawKey === masterPassword) ||
+      (Boolean(gatewayKey) && rawKey === gatewayKey));
+  const isMasterKey = isConfiguredMasterKey || (await isValidGatewayApiKey(rawKey));
+  const matchingCredentialToken = isMasterKey ? null : findTokenForCredential(allTokens, rawKey);
+  const hasMatchedToken = Boolean(
+    matchingCredentialToken || allTokens.some((token) => token.provider.toLowerCase() === rawKey.toLowerCase())
+  );
+
+  // Check session cookie for internal playground requests
+  let hasValidSession = false;
+  if (cookieHeader) {
+    const match = cookieHeader.match(/ath_session=([^;]+)/);
+    if (match && match[1]) {
+      try {
+        const { verifySessionToken } = await import("../auth");
+        hasValidSession = verifySessionToken(decodeURIComponent(match[1].trim()));
+      } catch {}
+    }
+  }
 
   let selectedToken: Token | null = null;
   let cleanModel = modelRequested || "default";
+  let isUnifiedRoute = false;
+  let unifiedFallbackTargets: UpstreamTarget[] = [];
+
+  // Unified aliases (ath/<model>) only route across tokens that explicitly
+  // list the same model in selectedModels. Each upstream receives its own
+  // exact model identifier; unrelated providers are never guessed as fallback.
+  const unifiedAlias = cleanModel.match(/^ath\/(.+)$/i);
+  if (unifiedAlias) {
+    const alias = unifiedAlias[1].split("/").filter(Boolean).at(-1)?.toLowerCase();
+    const group = getUnifiedModelGroups(allTokens).find((candidate) => candidate.name === alias);
+    if (!group) {
+      throw new Error(`Unified model "${cleanModel}" is unavailable or has no matching providers`);
+    }
+
+    const preferredRoute =
+      group.routes.find((route) => route.token.id === matchingCredentialToken?.id) ??
+      group.routes.find((route) => route.token.provider.toLowerCase() === rawKey.toLowerCase());
+    const orderedRoutes = preferredRoute
+      ? [preferredRoute, ...group.routes.filter((route) => route.token.id !== preferredRoute.token.id)]
+      : group.routes;
+    const [primary, ...fallbacks] = orderedRoutes;
+    if (!primary) throw new Error(`Unified model "${cleanModel}" has no eligible routes`);
+
+    selectedToken = primary.token;
+    cleanModel = primary.upstreamModel;
+    unifiedFallbackTargets = fallbacks.map((route) => buildTargetForToken(route.token, route.upstreamModel));
+    isUnifiedRoute = true;
+  }
 
   // Check if model has a provider prefix, e.g. "groq/llama-3.3-70b" or "google/gemini-2.5-flash"
-  if (cleanModel.includes("/")) {
+  if (!isUnifiedRoute && cleanModel.includes("/")) {
     const [prefix, ...rest] = cleanModel.split("/");
-    const matchByPrefix = allTokens.find(
-      (t) =>
-        t.provider.toLowerCase() === prefix.toLowerCase() ||
-        t.name.toLowerCase() === prefix.toLowerCase()
-    );
-    if (matchByPrefix) {
-      selectedToken = matchByPrefix;
+    const pooled = selectPooledToken(allTokens, prefix);
+    if (pooled) {
+      selectedToken = pooled;
       cleanModel = rest.join("/");
     }
   }
 
   // Check if auth header matches a specific token slug, id, or provider name
   if (!selectedToken && rawKey) {
-    selectedToken =
-      allTokens.find(
-        (t) =>
-          t.slug === rawKey ||
-          t.id === rawKey ||
-          t.name.toLowerCase() === rawKey.toLowerCase() ||
-          t.provider.toLowerCase() === rawKey.toLowerCase()
-      ) || null;
+    // If rawKey matches a provider name directly (e.g. 'google', 'openai', 'groq'), use pool
+    const pooledByProvider = selectPooledToken(allTokens, rawKey);
+    if (pooledByProvider) {
+      selectedToken = pooledByProvider;
+    } else {
+      selectedToken = matchingCredentialToken;
+    }
   }
 
-  // If still not matched, route by model name keyword
+  // If still not matched, route by model name keyword using Key Pooling
   if (!selectedToken) {
     const q = cleanModel.toLowerCase();
     if (q.includes("jev") || q.includes("typesafe")) {
-      selectedToken = allTokens.find((t) => t.provider === "jev") || null;
+      selectedToken = selectPooledToken(allTokens, "jev") || allTokens.find((t) => t.provider === "jev") || null;
     } else if (q.includes("deepseek")) {
-      selectedToken = allTokens.find((t) => t.provider === "deepseek") || null;
+      selectedToken = selectPooledToken(allTokens, "deepseek") || allTokens.find((t) => t.provider === "deepseek") || null;
     } else if (q.includes("gemini")) {
-      selectedToken = allTokens.find((t) => t.provider === "google") || null;
+      selectedToken = selectPooledToken(allTokens, "google") || allTokens.find((t) => t.provider === "google") || null;
     } else if (q.includes("groq") || q.includes("llama") || q.includes("qwen") || q.includes("mixtral")) {
-      selectedToken = allTokens.find((t) => t.provider === "groq") || null;
+      selectedToken = selectPooledToken(allTokens, "groq") || allTokens.find((t) => t.provider === "groq") || null;
     } else if (q.includes("gpt") || q.includes("o1") || q.includes("o3")) {
-      selectedToken = allTokens.find((t) => t.provider === "openai") || null;
+      selectedToken = selectPooledToken(allTokens, "openai") || allTokens.find((t) => t.provider === "openai") || null;
     } else if (q.includes("claude") || q.includes("minimax")) {
-      selectedToken = allTokens.find((t) => t.provider === "openrouter") || null;
+      selectedToken = selectPooledToken(allTokens, "openrouter") || allTokens.find((t) => t.provider === "openrouter") || null;
     }
   }
 
   // Default fallback to first active token (preferably OpenRouter or Groq)
   if (!selectedToken) {
     selectedToken =
-      allTokens.find((t) => t.provider === "openrouter" && t.active) ||
-      allTokens.find((t) => t.provider === "groq" && t.active) ||
+      selectPooledToken(allTokens, "openrouter") ||
+      selectPooledToken(allTokens, "groq") ||
       allTokens.find((t) => t.active) ||
       allTokens[0];
+  }
+
+  // Cascade Routing: classify complexity if 'auto' or 'cascade' was requested
+  if (selectedToken && (cleanModel === "auto" || cleanModel === "cascade" || cleanModel === "default")) {
+    const cascade = resolveCascadeModel(cleanModel, selectedToken.provider, messages || []);
+    cleanModel = cascade.resolvedModel;
+  }
+
+  // Authorization enforcement: require master password, valid session, or registered token identifier
+  const isDemo = process.env.APP_MODE === "demo" && !masterPassword && !gatewayKey;
+  const isAuthorizedCaller = isMasterKey || hasValidSession || hasMatchedToken;
+
+  if (!isAuthorizedCaller && !isDemo) {
+    throw new Error(
+      "Unauthorized: Invalid or missing API key. Provide your ATH token slug, token ID, or master password as Bearer token in the Authorization header."
+    );
   }
 
   if (!selectedToken) {
@@ -289,7 +389,11 @@ export async function resolveUpstreamTarget(
     );
   }
 
-  return buildTargetForToken(selectedToken, cleanModel);
+  return {
+    ...buildTargetForToken(selectedToken, cleanModel),
+    isUnifiedRoute,
+    fallbackTargets: unifiedFallbackTargets,
+  };
 }
 
 export function extractCallerInfo(request: Request): { caller: string; endpoint: string } {
@@ -348,6 +452,181 @@ export function extractCallerInfo(request: Request): { caller: string; endpoint:
   return { caller: "Cliente API General", endpoint: "/api/v1/chat/completions" };
 }
 
+async function recordUsageAndEnforceCap(
+  target: UpstreamTarget,
+  promptTokens: number,
+  completionTokens: number,
+  callerInfo?: { caller?: string | null; endpoint?: string | null },
+  latencyMs?: number | null
+): Promise<{ totalTokens: number; cost: number }> {
+  const totalTokens = promptTokens + completionTokens;
+  const calculatedCost = estimateCost(target.cleanModel, promptTokens, completionTokens);
+  const tokensPerSecond =
+    latencyMs && latencyMs > 0 && completionTokens > 0
+      ? Number(((completionTokens / latencyMs) * 1000).toFixed(2))
+      : null;
+
+  try {
+    const adapter = await loadAdapter();
+    await adapter.addSnapshot(target.token.id, {
+      tokensUsed: totalTokens,
+      cost: calculatedCost,
+      model: target.cleanModel,
+      inputTokens: promptTokens,
+      outputTokens: completionTokens,
+      latencyMs: latencyMs ?? null,
+      tokensPerSecond,
+      provider: target.token.provider,
+      caller: callerInfo?.caller || "Cliente API",
+      endpoint: callerInfo?.endpoint || "/api/v1/chat/completions",
+    });
+
+    if (
+      typeof target.token.maxUsd === "number" &&
+      target.token.maxUsd > 0 &&
+      target.token.totalCost + calculatedCost >= target.token.maxUsd
+    ) {
+      await adapter.setTokenActive(target.token.id, false);
+      await adapter.addAudit({
+        tokenId: target.token.id,
+        tokenName: target.token.name,
+        action: "gatekeeper_auto_pause",
+        detail: `// Límite mensual de $${target.token.maxUsd.toFixed(2)} USD alcanzado. Token pausado.`,
+      });
+
+      sendTelegramAlert({
+        title: "LÍMITE DE PRESUPUESTO EXCEDIDO (CAP USD)",
+        eventType: "cap_exceeded",
+        tokenName: target.token.name,
+        provider: target.token.provider,
+        message: `El token alcanzó el límite mensual establecido de $${target.token.maxUsd.toFixed(2)} USD y fue pausado automáticamente por Gatekeeper.`,
+        details: {
+          "Gasto Acumulado": `$${(target.token.totalCost + calculatedCost).toFixed(2)} USD`,
+          "Límite Máximo": `$${target.token.maxUsd.toFixed(2)} USD`,
+          "Estado Actual": "Pausado (Gatekeeper)",
+        },
+      }).catch(console.error);
+    }
+  } catch (err: any) {
+    console.error("[ATH Gateway] Failed to record usage snapshot:", err.message);
+  }
+
+  return { totalTokens, cost: calculatedCost };
+}
+
+/**
+ * Creates an instant SSE event stream from a cached response.
+ */
+function createCachedStreamResponse(cachedData: any, model: string): Response {
+  const content =
+    cachedData.choices?.[0]?.message?.content ||
+    (typeof cachedData === "string" ? cachedData : "");
+  const id = `chatcmpl-cached-${Date.now()}`;
+  const created = Math.floor(Date.now() / 1000);
+
+  const encoder = new TextEncoder();
+  const stream = new ReadableStream({
+    start(controller) {
+      const chunk1 = {
+        id,
+        object: "chat.completion.chunk",
+        created,
+        model,
+        choices: [{ index: 0, delta: { role: "assistant", content: "" }, finish_reason: null }],
+      };
+      controller.enqueue(encoder.encode(`data: ${JSON.stringify(chunk1)}\n\n`));
+
+      const chunk2 = {
+        id,
+        object: "chat.completion.chunk",
+        created,
+        model,
+        choices: [{ index: 0, delta: { content }, finish_reason: null }],
+      };
+      controller.enqueue(encoder.encode(`data: ${JSON.stringify(chunk2)}\n\n`));
+
+      const chunk3 = {
+        id,
+        object: "chat.completion.chunk",
+        created,
+        model,
+        choices: [{ index: 0, delta: {}, finish_reason: "stop" }],
+        usage: { prompt_tokens: 0, completion_tokens: 0, total_tokens: 0 },
+      };
+      controller.enqueue(encoder.encode(`data: ${JSON.stringify(chunk3)}\n\n`));
+      controller.enqueue(encoder.encode("data: [DONE]\n\n"));
+      controller.close();
+    },
+  });
+
+  return new Response(stream, {
+    headers: {
+      "Content-Type": "text/event-stream; charset=utf-8",
+      "Cache-Control": "no-cache",
+      "X-ATH-Cache": "HIT",
+      "X-ATH-Cost-Saved": "$0.00",
+    },
+  });
+}
+
+function isRetryableUnifiedStatus(status: number): boolean {
+  return status === 401 || status === 404 || status === 408 || status === 429 || status >= 500;
+}
+
+async function requestUnifiedRoute(
+  primary: UpstreamTarget,
+  payload: ProxyChatRequest
+): Promise<{
+  response: Response | null;
+  activeTarget: UpstreamTarget;
+  usedFallback: boolean;
+  primaryFailure: number | "connection" | null;
+  error?: unknown;
+}> {
+  const candidates = [primary, ...(primary.fallbackTargets ?? [])];
+  let lastResponse: Response | null = null;
+  let activeTarget = primary;
+  let primaryFailure: number | "connection" | null = null;
+  let lastError: unknown;
+
+  for (const [index, candidate] of candidates.entries()) {
+    try {
+      const response = await fetch(candidate.url, {
+        method: "POST",
+        headers: candidate.headers,
+        body: JSON.stringify({ ...payload, model: candidate.cleanModel }),
+      });
+
+      if (index === 0 && !response.ok) primaryFailure = response.status;
+      if (response.ok) {
+        return {
+          response,
+          activeTarget: candidate,
+          usedFallback: index > 0,
+          primaryFailure,
+        };
+      }
+
+      lastResponse = response;
+      activeTarget = candidate;
+      if (!isRetryableUnifiedStatus(response.status)) {
+        return { response, activeTarget: candidate, usedFallback: false, primaryFailure };
+      }
+    } catch (error) {
+      if (index === 0) primaryFailure = "connection";
+      lastError = error;
+    }
+  }
+
+  return {
+    response: lastResponse,
+    activeTarget,
+    usedFallback: false,
+    primaryFailure,
+    error: lastError,
+  };
+}
+
 /**
  * Forwards request to upstream provider, handles streaming/non-streaming,
  * automatic fallback on HTTP 429/5xx, and logs usage and audits into Convex.
@@ -355,52 +634,153 @@ export function extractCallerInfo(request: Request): { caller: string; endpoint:
 export async function forwardChatRequest(
   target: UpstreamTarget,
   body: ProxyChatRequest,
-  callerInfo?: { caller?: string | null; endpoint?: string | null }
+  callerInfo?: { caller?: string | null; endpoint?: string | null; agent?: string | null }
 ): Promise<Response> {
-  const payload = {
+  const agentIdentifier = callerInfo?.agent || target.token.agent || callerInfo?.caller || "default-agent";
+
+  // 1. Agent Loop Breaker
+  const breaker = checkAgentCircuitBreaker(agentIdentifier, body.messages);
+  if (breaker.tripped) {
+    sendTelegramAlert({
+      title: "CIRCUIT BREAKER: BUCLE INFINITO DE AGENTE",
+      eventType: "cap_exceeded",
+      tokenName: target.token.name,
+      provider: target.token.provider,
+      message: breaker.reason || "Bucle infinito detectado.",
+      details: {
+        Agente: agentIdentifier,
+        Acción: "Petición bloqueada preventivamente",
+        "Reintento en": `${breaker.retryAfterSeconds}s`,
+      },
+    }).catch(console.error);
+
+    return Response.json(
+      {
+        error: {
+          message: breaker.reason,
+          type: "circuit_breaker_tripped",
+          code: "agent_loop_detected",
+        },
+      },
+      {
+        status: 429,
+        headers: {
+          "Retry-After": String(breaker.retryAfterSeconds),
+        },
+      }
+    );
+  }
+
+  // 2. Data Loss Prevention (DLP)
+  const dlp = applyDlpToMessages(body.messages);
+  if (dlp.secretsRedacted > 0) {
+    console.warn(`[ATH Gateway DLP] Sanitizados ${dlp.secretsRedacted} secretos en prompt (${dlp.detectedTypes.join(", ")})`);
+  }
+
+  // 3. Caché de respuestas con deduplicación de prompts
+  const cacheKey = computeCacheKey(target.cleanModel, dlp.sanitizedMessages, body.temperature);
+  const cached = getCachedResponse(cacheKey);
+  if (cached) {
+    if (body.stream) {
+      return createCachedStreamResponse(cached.response, target.cleanModel);
+    }
+    return Response.json(cached.response, {
+      headers: {
+        "X-ATH-Cache": "HIT",
+        "X-ATH-Cost-Saved": `$${cached.costSavedUsd.toFixed(4)}`,
+      },
+    });
+  }
+
+  const payload: any = {
     ...body,
+    messages: dlp.sanitizedMessages,
     model: target.cleanModel,
   };
+  if (body.stream && !payload.stream_options) {
+    payload.stream_options = { include_usage: true };
+  }
 
   let upstreamRes: Response;
   let activeTarget = target;
   let usedFallback = false;
 
-  try {
-    upstreamRes = await fetch(target.url, {
-      method: "POST",
-      headers: target.headers,
-      body: JSON.stringify(payload),
-    });
-  } catch (err: any) {
-    // If primary upstream failed to connect, attempt fallback immediately
-    console.warn(`[ATH Gateway] Connection failed to ${target.url}: ${err.message}. Looking for fallback...`);
-    const fallback = await findFallbackCandidate(target.token, target.cleanModel);
-    if (fallback) {
-      usedFallback = true;
-      activeTarget = fallback;
-      try {
-        upstreamRes = await fetch(fallback.url, {
-          method: "POST",
-          headers: fallback.headers,
-          body: JSON.stringify({ ...body, model: fallback.cleanModel }),
-        });
-      } catch (err2: any) {
+  if (target.isUnifiedRoute) {
+    const result = await requestUnifiedRoute(target, payload);
+    if (!result.response) {
+      const detail = result.error instanceof Error ? result.error.message : "all configured routes failed to connect";
+      return Response.json(
+        { error: { message: `Unified model routes failed: ${detail}`, type: "upstream_connect_error" } },
+        { status: 502 }
+      );
+    }
+
+    upstreamRes = result.response;
+    activeTarget = result.activeTarget;
+    usedFallback = result.usedFallback;
+
+    if (usedFallback) {
+      const reason = result.primaryFailure === "connection" ? "connection failure" : `HTTP ${result.primaryFailure}`;
+      sendTelegramAlert({
+        title: "CONMUTACIÓN DE MODELO UNIFICADO",
+        eventType: "fallback",
+        tokenName: target.token.name,
+        provider: target.token.provider,
+        message: `La ruta principal falló (${reason}); se usó ${activeTarget.token.name} en ${activeTarget.token.provider}.`,
+        details: {
+          "Modelo solicitado": body.model,
+          "Modelo upstream": activeTarget.cleanModel,
+          "Proveedor principal": target.token.provider,
+          "Proveedor utilizado": activeTarget.token.provider,
+        },
+      }).catch(console.error);
+
+      loadAdapter().then((adapter) =>
+        adapter.addAudit({
+          tokenId: target.token.id,
+          tokenName: target.token.name,
+          action: "unified_model_fallback",
+          detail: `Fallback de ${target.token.provider} a ${activeTarget.token.provider} (${activeTarget.cleanModel}); motivo: ${reason}`,
+        }).catch(console.error)
+      ).catch(console.error);
+    }
+  } else {
+    try {
+      upstreamRes = await fetch(target.url, {
+        method: "POST",
+        headers: target.headers,
+        body: JSON.stringify(payload),
+      });
+    } catch (err: any) {
+      // Keep the existing fallback behavior for provider-specific requests.
+      console.warn(`[ATH Gateway] Connection failed to ${target.url}: ${err.message}. Looking for fallback...`);
+      const fallback = await findFallbackCandidate(target.token, target.cleanModel);
+      if (fallback) {
+        usedFallback = true;
+        activeTarget = fallback;
+        try {
+          upstreamRes = await fetch(fallback.url, {
+            method: "POST",
+            headers: fallback.headers,
+            body: JSON.stringify({ ...body, model: fallback.cleanModel }),
+          });
+        } catch (err2: any) {
+          return Response.json(
+            { error: { message: `Primary and fallback both failed to connect: ${err.message} / ${err2.message}`, type: "upstream_connect_error" } },
+            { status: 502 }
+          );
+        }
+      } else {
         return Response.json(
-          { error: { message: `Primary and fallback both failed to connect: ${err.message} / ${err2.message}`, type: "upstream_connect_error" } },
+          { error: { message: `Failed to connect to upstream: ${err.message}`, type: "upstream_connect_error" } },
           { status: 502 }
         );
       }
-    } else {
-      return Response.json(
-        { error: { message: `Failed to connect to upstream: ${err.message}`, type: "upstream_connect_error" } },
-        { status: 502 }
-      );
     }
   }
 
   // Handle upstream error (especially 429 Rate Limit, 5xx outages, or 401 Bad Key)
-  if (!upstreamRes.ok && !usedFallback && (upstreamRes.status === 429 || upstreamRes.status >= 500 || upstreamRes.status === 401)) {
+  if (!target.isUnifiedRoute && !upstreamRes.ok && !usedFallback && (upstreamRes.status === 429 || upstreamRes.status >= 500 || upstreamRes.status === 401)) {
     const errorStatus = upstreamRes.status;
     console.warn(`[ATH Gateway] Key "${target.token.name}" received HTTP ${errorStatus}. Activating fallback candidate...`);
 
@@ -480,8 +860,8 @@ export async function forwardChatRequest(
     return Response.json(errorJson, { status: upstreamRes.status });
   }
 
-  // Handle streaming SSE
-  if (body.stream) {
+  // Handle streaming SSE with real-time usage and cost tracking
+  if (body.stream && upstreamRes.body) {
     const streamHeaders: Record<string, string> = {
       "Content-Type": "text/event-stream; charset=utf-8",
       "Cache-Control": "no-cache",
@@ -492,7 +872,64 @@ export async function forwardChatRequest(
       streamHeaders["X-ATH-Original-Token"] = target.token.name;
       streamHeaders["X-ATH-Fallback-Token"] = activeTarget.token.name;
     }
-    return new Response(upstreamRes.body, {
+
+    let streamBuffer = "";
+    let capturedPromptTokens = 0;
+    let capturedCompletionTokens = 0;
+    let chunkCount = 0;
+    const streamStart = Date.now();
+    const decoder = new TextDecoder();
+
+    const transformStream = new TransformStream({
+      transform(chunk, controller) {
+        // Forward immediately to ensure low-latency streaming to client
+        controller.enqueue(chunk);
+
+        // Decode and parse SSE lines in background
+        streamBuffer += decoder.decode(chunk, { stream: true });
+        const lines = streamBuffer.split("\n");
+        streamBuffer = lines.pop() || "";
+
+        for (const line of lines) {
+          const trimmed = line.trim();
+          if (!trimmed.startsWith("data:")) continue;
+          const jsonStr = trimmed.slice(5).trim();
+          if (!jsonStr || jsonStr === "[DONE]") continue;
+
+          try {
+            const parsed = JSON.parse(jsonStr);
+            if (parsed.usage) {
+              capturedPromptTokens = parsed.usage.prompt_tokens ?? capturedPromptTokens;
+              capturedCompletionTokens = parsed.usage.completion_tokens ?? capturedCompletionTokens;
+            } else if (parsed.choices?.[0]?.delta?.content) {
+              chunkCount++;
+            }
+          } catch {}
+        }
+      },
+      async flush() {
+        const streamDuration = Date.now() - streamStart;
+        const promptTokens =
+          capturedPromptTokens ||
+          Math.max(1, Math.ceil(JSON.stringify(body.messages || []).length / 4));
+        const completionTokens =
+          capturedCompletionTokens ||
+          Math.max(1, Math.ceil(chunkCount * 0.75));
+
+        await recordUsageAndEnforceCap(
+          activeTarget,
+          promptTokens,
+          completionTokens,
+          {
+            caller: callerInfo?.caller ? `${callerInfo.caller} (Stream)` : "Cliente API (Stream)",
+            endpoint: callerInfo?.endpoint || "/api/v1/chat/completions",
+          },
+          streamDuration
+        );
+      },
+    });
+
+    return new Response(upstreamRes.body.pipeThrough(transformStream), {
       status: 200,
       headers: streamHeaders,
     });
@@ -503,61 +940,20 @@ export async function forwardChatRequest(
   const usage = data?.usage || {};
   const promptTokens = usage.prompt_tokens ?? 0;
   const completionTokens = usage.completion_tokens ?? 0;
-  const totalTokens = usage.total_tokens ?? promptTokens + completionTokens;
-  const calculatedCost = estimateCost(activeTarget.cleanModel, promptTokens, completionTokens);
 
-  // Synchronous logging to Convex to ensure persistence in Serverless environments
-  try {
-    const adapter = await loadAdapter();
-    await adapter.addSnapshot(activeTarget.token.id, {
-      tokensUsed: totalTokens,
-      cost: calculatedCost,
-      model: activeTarget.cleanModel,
-      inputTokens: promptTokens,
-      outputTokens: completionTokens,
-      provider: activeTarget.token.provider,
-      caller: callerInfo?.caller || "Cliente API",
-      endpoint: callerInfo?.endpoint || "/api/v1/chat/completions",
-    });
+  const { cost } = await recordUsageAndEnforceCap(
+    activeTarget,
+    promptTokens,
+    completionTokens,
+    callerInfo
+  );
 
-    // Update total cost on active token
-    await adapter.updateToken({
-      id: activeTarget.token.id,
-      totalCost: activeTarget.token.totalCost + calculatedCost,
-    });
+  // Store successful non-streaming response in cache for subsequent repeat queries
+  setCachedResponse(cacheKey, activeTarget.cleanModel, data, cost);
 
-    // Gatekeeper check: if newly added cost crosses cap, pause token, audit & send Telegram alert
-    if (
-      typeof activeTarget.token.maxUsd === "number" &&
-      activeTarget.token.maxUsd > 0 &&
-      activeTarget.token.totalCost + calculatedCost >= activeTarget.token.maxUsd
-    ) {
-      await adapter.setTokenActive(activeTarget.token.id, false);
-      await adapter.addAudit({
-        tokenId: activeTarget.token.id,
-        tokenName: activeTarget.token.name,
-        action: "gatekeeper_auto_pause",
-        detail: `// Límite mensual de $${activeTarget.token.maxUsd.toFixed(2)} USD alcanzado. Token pausado.`,
-      });
-
-      sendTelegramAlert({
-        title: "LÍMITE DE PRESUPUESTO EXCEDIDO (CAP USD)",
-        eventType: "cap_exceeded",
-        tokenName: activeTarget.token.name,
-        provider: activeTarget.token.provider,
-        message: `El token alcanzó el límite mensual establecido de $${activeTarget.token.maxUsd.toFixed(2)} USD y fue pausado automáticamente por Gatekeeper.`,
-        details: {
-          "Gasto Acumulado": `$${(activeTarget.token.totalCost + calculatedCost).toFixed(2)} USD`,
-          "Límite Máximo": `$${activeTarget.token.maxUsd.toFixed(2)} USD`,
-          "Estado Actual": "Pausado (Gatekeeper)",
-        },
-      }).catch(console.error);
-    }
-  } catch (err: any) {
-    console.error("Failed to log proxy usage snapshot:", err.message);
-  }
-
-  const responseHeaders: Record<string, string> = {};
+  const responseHeaders: Record<string, string> = {
+    "X-ATH-Cache": "MISS",
+  };
   if (usedFallback) {
     responseHeaders["X-ATH-Fallback"] = "true";
     responseHeaders["X-ATH-Original-Token"] = target.token.name;

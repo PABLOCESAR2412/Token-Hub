@@ -26,7 +26,12 @@ export const nvidiaProvider: ProviderAdapter = {
       return {
         tokensUsed: data.total_tokens_used || usedCredits,
         cost: usedCredits,
-        raw: data,
+        raw: {
+          ...data,
+          usageSupported: true,
+          usagePeriod: "account_total",
+          tokensApproximate: !data.total_tokens_used,
+        },
       };
     } catch (err: any) {
       return { tokensUsed: 0, cost: 0, raw: { error: err.message } };

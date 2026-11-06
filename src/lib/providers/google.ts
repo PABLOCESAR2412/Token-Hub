@@ -34,6 +34,7 @@ export const googleProvider: ProviderAdapter = {
         cost: 0,
         raw: {
           ok: true,
+          usageSupported: false,
           provider: "Google Gemini (Google AI Studio)",
           plan: "Plan Pro / Standard (Pay-As-You-Go)",
           serviceTier: "standard",

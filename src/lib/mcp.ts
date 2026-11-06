@@ -3,6 +3,7 @@ import { inspectProviderKey } from "./providers/inspector";
 import { decrypt } from "./crypto";
 import type { Token } from "./types";
 import { sendTelegramAlert } from "./telegram";
+import { timingSafeEqual } from "crypto";
 
 export interface JsonRpcRequest {
   jsonrpc: "2.0";
@@ -160,12 +161,13 @@ export const MCP_PROMPTS = [
 ];
 
 function verifyAuth(authHeader: string | null | undefined): boolean {
-  const masterPassword = process.env.AUTH_PASSWORD;
-  if (!masterPassword) return true; // No password configured
+  const masterPassword = process.env.AUTH_PASSWORD?.trim();
+  if (!masterPassword || !authHeader) return false;
 
-  if (!authHeader) return false;
   const token = authHeader.replace(/^Bearer\s+/i, "").trim();
-  return token === masterPassword.trim();
+  const provided = Buffer.from(token);
+  const expected = Buffer.from(masterPassword);
+  return provided.length === expected.length && timingSafeEqual(provided, expected);
 }
 
 /**

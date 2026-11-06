@@ -18,7 +18,7 @@ export function makeStaticProvider(opts: StaticProviderOptions): ProviderAdapter
     fetchUsage: async (): Promise<ProviderUsage> => ({
       tokensUsed: 0,
       cost: 0,
-      raw: { note: opts.note || "No public usage endpoint", simulated: true },
+      raw: { note: opts.note || "No public usage endpoint", usageSupported: false },
     }),
   };
 }

@@ -87,3 +87,25 @@ export function sessionCookieValue(): { name: string; value: string } {
 export function unauthorized(): Response {
   return Response.json({ error: "Unauthorized" }, { status: 401 });
 }
+
+/**
+ * Returns true if the environment or request connection is secure (HTTPS).
+ */
+export function isSecureContext(request?: Request): boolean {
+  if (
+    process.env.NODE_ENV === "production" ||
+    process.env.APP_MODE === "production" ||
+    process.env.VERCEL === "1"
+  ) {
+    return true;
+  }
+  if (request) {
+    const proto = request.headers.get("x-forwarded-proto");
+    if (proto === "https") return true;
+    try {
+      const url = new URL(request.url);
+      if (url.protocol === "https:") return true;
+    } catch {}
+  }
+  return false;
+}

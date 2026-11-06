@@ -3,23 +3,39 @@ import { json } from "@tanstack/react-start";
 import { loadAdapter } from "../../../lib/storage-adapter";
 import { getProviderBySlug } from "../../../lib/providers";
 import { decrypt } from "../../../lib/crypto";
+import { isAuthorized } from "../../../lib/auth";
 
-// Verifies CRON_SECRET to prevent unauthorized access
+// Verifies CRON_SECRET, master password, or active session to prevent unauthorized access
 export const Route = createFileRoute("/api/cron/poll-usage")({
   server: {
     handlers: {
       POST: async ({ request }) => {
         const authHeader = request.headers.get("authorization");
-        const cronSecret = process.env.CRON_SECRET;
+        const cronSecret = process.env.CRON_SECRET?.trim();
+        const masterPassword = process.env.AUTH_PASSWORD?.trim();
+        const rawKey = authHeader?.replace(/^Bearer\s+/i, "").trim() || "";
 
-        if (cronSecret && authHeader !== `Bearer ${cronSecret}`) {
-          return json({ error: "Unauthorized" }, { status: 401 });
+        const isAuthorizedCron = Boolean(cronSecret && rawKey === cronSecret);
+        const isMasterSecret = Boolean(masterPassword && rawKey === masterPassword);
+        const isSessionUser = isAuthorized(request);
+
+        if (!isAuthorizedCron && !isMasterSecret && !isSessionUser) {
+          return json(
+            { error: "Unauthorized: Requiere sesión de administrador o header Authorization con CRON_SECRET / clave maestra válida." },
+            { status: 401 }
+          );
         }
 
         const adapter = await loadAdapter();
         const tokens = await adapter.getTokens();
 
-        const results: Array<{ tokenId: string; provider: string; success: boolean; error?: string }> = [];
+        const results: Array<{
+          tokenId: string;
+          provider: string;
+          success: boolean;
+          error?: string;
+          reportedUsage?: { tokensUsed: number; cost: number; period: string; tokensApproximate: boolean };
+        }> = [];
 
         for (const token of tokens) {
           const providerAdapter = getProviderBySlug(token.provider);
@@ -40,74 +56,48 @@ export const Route = createFileRoute("/api/cron/poll-usage")({
               trackingKey: token.trackingKey ? decrypt(token.trackingKey) : null,
               baseUrl: token.baseUrl ?? null,
             });
-            if (usage.tokensUsed > 0 || usage.cost > 0 || (usage.daily && usage.daily.length > 0)) {
-              if (usage.models && usage.models.length > 0) {
-                // Providers may expose per-model breakdown; store one snapshot per model.
-                for (const m of usage.models) {
-                  await adapter.addSnapshot(token.id, {
-                    tokensUsed: m.tokensUsed,
-                    cost: m.cost,
-                    model: m.model ?? null,
-                    inputTokens: m.inputTokens ?? 0,
-                    outputTokens: m.outputTokens ?? 0,
-                    latencyMs: m.latencyMs ?? null,
-                    tokensPerSecond: m.tokensPerSecond ?? null,
-                    provider: token.provider,
-                    timestamp: new Date().toISOString(),
-                  });
-                }
-              } else if (usage.daily && usage.daily.length > 0) {
-                // Providers may return per-day detail; store one snapshot per day.
-                for (const d of usage.daily) {
-                  await adapter.addSnapshot(token.id, {
-                    tokensUsed: d.tokensUsed,
-                    cost: d.cost,
-                    model: d.model ?? null,
-                    inputTokens: 0,
-                    outputTokens: 0,
-                    latencyMs: null,
-                    tokensPerSecond: null,
-                    provider: token.provider,
-                    timestamp: d.timestamp,
-                  });
-                }
-              } else {
-                // Fallback: a single snapshot covering the reported window.
-                await adapter.addSnapshot(token.id, {
-                  tokensUsed: usage.tokensUsed,
-                  cost: usage.cost,
-                  model: null,
-                  inputTokens: 0,
-                  outputTokens: 0,
-                  latencyMs: null,
-                  tokensPerSecond: null,
-                  provider: token.provider,
-                });
-              }
+            const raw = usage.raw ?? {};
+            const error = typeof raw.error === "string" ? raw.error : null;
+            const status = typeof raw.status === "number" ? raw.status : null;
 
-              // Gatekeeper: auto-pause a token that blew its monthly cap.
-              if (typeof token.maxUsd === "number" && token.maxUsd > 0 && token.totalCost + usage.cost > token.maxUsd) {
-                try {
-                  await adapter.setTokenActive(token.id, false);
-                  await adapter.addAudit({
-                    tokenId: token.id,
-                    tokenName: token.name,
-                    action: "cap_exceeded",
-                    detail: `// Cap $${token.maxUsd.toFixed(2)} superado`,
-                  });
-                } catch (e: any) {
-                  results.push({ tokenId: token.id, provider: token.provider, success: false, error: `Cap check: ${e.message}` });
-                }
-              }
-              results.push({ tokenId: token.id, provider: token.provider, success: true });
-            } else {
-              results.push({ tokenId: token.id, provider: token.provider, success: false, error: "No usage data" });
+            if (error || (status !== null && status >= 400)) {
+              results.push({
+                tokenId: token.id,
+                provider: token.provider,
+                success: false,
+                error: error || `Provider returned HTTP ${status}`,
+              });
+              continue;
             }
+
+            if (raw.usageSupported !== true) {
+              results.push({
+                tokenId: token.id,
+                provider: token.provider,
+                success: false,
+                error: "No verified provider usage endpoint is configured",
+              });
+              continue;
+            }
+
+            results.push({
+              tokenId: token.id,
+              provider: token.provider,
+              success: true,
+              reportedUsage: {
+                tokensUsed: Number.isFinite(usage.tokensUsed) ? usage.tokensUsed : 0,
+                cost: Number.isFinite(usage.cost) ? usage.cost : 0,
+                period: typeof raw.usagePeriod === "string" ? raw.usagePeriod : "provider_reported",
+                tokensApproximate: raw.tokensApproximate === true,
+              },
+            });
           } catch (err: any) {
             results.push({ tokenId: token.id, provider: token.provider, success: false, error: err.message });
           }
         }
 
+        // Provider totals are cumulative or windowed, so this endpoint reports them without
+        // adding duplicate snapshots or changing the gateway's per-request spend total.
         return json({ timestamp: new Date().toISOString(), results });
       },
     },

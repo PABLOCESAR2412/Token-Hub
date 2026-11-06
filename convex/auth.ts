@@ -1,9 +1,11 @@
 import { query, mutation } from "./_generated/server";
 import { v } from "convex/values";
+import { requireServiceSecret } from "./authz";
 
 export const getAuthConfig = query({
-  args: {},
-  handler: async (ctx) => {
+  args: { serviceSecret: v.string() },
+  handler: async (ctx, args) => {
+    requireServiceSecret(args.serviceSecret);
     return await ctx.db
       .query("authConfig")
       .withIndex("by_configId", (q) => q.eq("configId", "owner"))
@@ -13,11 +15,13 @@ export const getAuthConfig = query({
 
 export const setAuthConfig = mutation({
   args: {
+    serviceSecret: v.string(),
     passwordHash: v.string(),
     mustChangePassword: v.boolean(),
     totpSecret: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
+    requireServiceSecret(args.serviceSecret);
     const existing = await ctx.db
       .query("authConfig")
       .withIndex("by_configId", (q) => q.eq("configId", "owner"))
@@ -44,9 +48,11 @@ export const setAuthConfig = mutation({
 
 export const ensureAuthRow = mutation({
   args: {
+    serviceSecret: v.string(),
     defaultHash: v.string(),
   },
   handler: async (ctx, args) => {
+    requireServiceSecret(args.serviceSecret);
     const existing = await ctx.db
       .query("authConfig")
       .withIndex("by_configId", (q) => q.eq("configId", "owner"))
@@ -67,6 +73,15 @@ export const ensureAuthRow = mutation({
         mustChangePassword: true,
       });
       return { passwordHash: args.defaultHash, mustChangePassword: true };
+    }
+
+    if (existing.mustChangePassword) {
+      await ctx.db.patch(existing._id, { passwordHash: args.defaultHash });
+      return {
+        passwordHash: args.defaultHash,
+        mustChangePassword: true,
+        totpSecret: existing.totpSecret,
+      };
     }
 
     return {

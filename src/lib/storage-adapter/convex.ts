@@ -26,8 +26,24 @@ function getConvexUrl(): string {
   );
 }
 
-function getConvexClient(): ConvexHttpClient {
-  return new ConvexHttpClient(getConvexUrl());
+type SecureConvexClient = {
+  query: (reference: any, args?: any) => Promise<any>;
+  mutation: (reference: any, args?: any) => Promise<any>;
+};
+
+function getConvexClient(): SecureConvexClient {
+  const serviceSecret = process.env.ATH_SERVICE_SECRET?.trim();
+  if (!serviceSecret) {
+    throw new Error("ATH_SERVICE_SECRET debe configurarse en el servidor de la aplicación.");
+  }
+
+  const client = new ConvexHttpClient(getConvexUrl());
+  return {
+    query: (reference, args = {}) =>
+      client.query(reference, { ...args, serviceSecret }),
+    mutation: (reference, args = {}) =>
+      client.mutation(reference, { ...args, serviceSecret }),
+  };
 }
 
 function maskKey(raw: string): string {
@@ -253,8 +269,10 @@ export const convexAdapter: StorageAdapter = {
     if (input.maxUsd !== undefined) patches.maxUsd = input.maxUsd ?? null;
     if (input.tags !== undefined) patches.tags = input.tags;
     if (input.agent !== undefined) patches.agent = input.agent ?? null;
+    if (input.totalCost !== undefined) patches.totalCost = input.totalCost;
 
     const updated = await convex.mutation(api.tokens.update, patches);
+    if (!updated) throw new Error("Failed to update token: token not found");
 
     await convex.mutation(api.audits.add, {
       auditId: "aud_" + crypto.randomUUID().slice(0, 8),
@@ -404,6 +422,7 @@ export const convexAdapter: StorageAdapter = {
   setTokenActive: async (id: string, active: boolean) => {
     const convex = getConvexClient();
     const updated = await convex.mutation(api.tokens.setActive, { tokenId: id, active });
+    if (!updated) throw new Error("Failed to set token active: token not found");
 
     await convex.mutation(api.audits.add, {
       auditId: "aud_" + crypto.randomUUID().slice(0, 8),

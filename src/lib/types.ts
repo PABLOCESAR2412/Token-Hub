@@ -102,6 +102,7 @@ export type UpdateTokenInput = {
   fallbackTokenId?: string | null;
   planId?: string | null;
   selectedModels?: string[];
+  totalCost?: number;
 };
 
 export interface TelegramSettings {

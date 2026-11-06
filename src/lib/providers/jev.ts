@@ -59,6 +59,9 @@ export const jevProvider: ProviderAdapter = {
         cost: totalUsage,
         raw: {
           ok: true,
+          usageSupported: isOpenRouterKey,
+          usagePeriod: isOpenRouterKey ? "openrouter_account_total" : undefined,
+          tokensApproximate: isOpenRouterKey,
           provider: "JEV (TypeSafe AI)",
           architecture: "System-One Decision Engine (<5ms Latency)",
           pricing: "$0.042 por 1M tokens de entrada (0 costo en output)",

@@ -1,8 +1,6 @@
 import { hashRevealSecret, verifyRevealSecret } from "./reveal";
 import { verifyTotp } from "./totp";
 
-export const DEFAULT_PASSWORD = "admin123";
-
 function getConvexUrl(): string {
   return (
     process.env.PROYECT_CONVEX_URL ||
@@ -30,7 +28,19 @@ async function getConvex() {
   const { ConvexHttpClient } = await import("convex/browser");
   const { api } = await import("../../convex/_generated/api");
   const url = getConvexUrl();
-  return { client: new ConvexHttpClient(url), api };
+  const serviceSecret = process.env.ATH_SERVICE_SECRET?.trim();
+  if (!serviceSecret) {
+    throw new Error("ATH_SERVICE_SECRET debe configurarse en el servidor de la aplicación.");
+  }
+
+  const rawClient = new ConvexHttpClient(url);
+  const client = {
+    query: (reference: any, args: any = {}) =>
+      rawClient.query(reference, { ...args, serviceSecret }),
+    mutation: (reference: any, args: any = {}) =>
+      rawClient.mutation(reference, { ...args, serviceSecret }),
+  };
+  return { client, api };
 }
 
 let prismaClientInstance: any = null;
@@ -42,15 +52,24 @@ async function getPrisma() {
   return prismaClientInstance;
 }
 
-/**
- * Seeds the AuthConfig row with the default password the first time.
- * The user is forced to change it before using the app (mustChangePassword=true).
- */
-async function ensureAuthRow(): Promise<string> {
-  const hash = await hashRevealSecret(DEFAULT_PASSWORD);
+function getBootstrapPassword(): string {
+  const password = process.env.AUTH_PASSWORD;
+  if (!password || password.length < 8) {
+    throw new Error("AUTH_PASSWORD must be configured (at least 8 characters) before owner authentication can be initialized.");
+  }
+  return password;
+}
 
+/** Initializes or repairs an unclaimed owner password from server configuration. */
+async function ensureAuthRow(): Promise<string> {
   if (isConvexMode()) {
     const { client, api } = await getConvex();
+    const existing = await client.query(api.auth.getAuthConfig);
+    if (existing && existing.passwordHash !== "pending" && !existing.mustChangePassword) {
+      return existing.passwordHash;
+    }
+
+    const hash = await hashRevealSecret(getBootstrapPassword());
     const row = await client.mutation(api.auth.ensureAuthRow, { defaultHash: hash });
     return row.passwordHash;
   }
@@ -59,13 +78,16 @@ async function ensureAuthRow(): Promise<string> {
   let row = await prisma.authConfig.findUnique({ where: { id: "owner" } });
 
   if (!row) {
+    const hash = await hashRevealSecret(getBootstrapPassword());
     row = await prisma.authConfig.create({
       data: { id: "owner", passwordHash: hash, mustChangePassword: true },
     });
   }
 
-  // The migration inserts a placeholder hash; backfill it lazily on first use.
-  if (row.passwordHash === "pending") {
+  // Bootstrap rows (including old placeholder rows) use server configuration,
+  // so no password embedded in the source can remain active.
+  if (row.passwordHash === "pending" || row.mustChangePassword) {
+    const hash = await hashRevealSecret(getBootstrapPassword());
     row = await prisma.authConfig.update({
       where: { id: "owner" },
       data: { passwordHash: hash, mustChangePassword: true },
@@ -93,9 +115,6 @@ export async function getAuthState(): Promise<{ mustChangePassword: boolean }> {
 
 export async function verifyOwnerPassword(password: string): Promise<boolean> {
   if (!password) return false;
-  if (process.env.AUTH_PASSWORD && password === process.env.AUTH_PASSWORD) {
-    return true;
-  }
   const hash = await ensureAuthRow();
   return await verifyRevealSecret(password, hash);
 }

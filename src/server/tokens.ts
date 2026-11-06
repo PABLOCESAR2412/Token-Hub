@@ -4,6 +4,8 @@ import { loadAdapter } from "../lib/storage-adapter";
 import { isAuthorized, unauthorized } from "../lib/auth";
 import type { CreateTokenInput, UpdateTokenInput, TelegramSettings } from "../lib/types";
 import { getTelegramConfig, sendTestTelegramAlert } from "../lib/telegram";
+import { decrypt } from "../lib/crypto";
+import { getProviderBySlug } from "../lib/providers";
 
 export const unauthorizedResponse = unauthorized;
 
@@ -167,151 +169,39 @@ export const syncHistoricalUsage = createServerFn({ method: "POST" })
   )
   .handler(async ({ data }) => {
     if (!isAuthorized(getRequest())) return unauthorizedResponse();
+    if (!Number.isFinite(data.totalTokens) || (data.totalTokens ?? -1) < 0) {
+      throw new Error("Indica el total real de tokens para importar.");
+    }
+    if (!Number.isFinite(data.totalCost) || (data.totalCost ?? -1) < 0) {
+      throw new Error("Indica el costo real para importar.");
+    }
+
     const adapter = await loadAdapter();
     const token = await adapter.getToken(data.tokenId);
     if (!token) throw new Error("Token no encontrado");
 
-    const days = Math.min(Math.max(data.days || 30, 1), 30);
-    const now = Date.now();
-    const DAY_MS = 24 * 60 * 60 * 1000;
-    const providerLower = token.provider.toLowerCase().trim();
-
-    let totalTokens = data.totalTokens || 0;
-    let totalCost = data.totalCost || 0;
-    let customModel = data.model;
-
-    // 1. If OpenRouter, pull real usage from API if not explicitly overridden
-    if (providerLower === "openrouter" && !data.totalTokens) {
-      try {
-        const { decrypt } = await import("../lib/crypto");
-        const key = decrypt(token.encryptedValue);
-        const res = await fetch("https://openrouter.ai/api/v1/key", {
-          headers: { Authorization: `Bearer ${key}` },
-        });
-        if (res.ok) {
-          const kd = (await res.json())?.data || {};
-          const usage = kd.usage || 0;
-          totalCost = Number(usage.toFixed(4));
-          totalTokens = Math.max(Math.round(usage * 600_000), 18_500);
-        }
-      } catch {}
-    }
-
-    // 2. Intelligent provider estimation defaults if totalTokens/totalCost not specified
-    if (totalTokens <= 0 && totalCost <= 0) {
-      if (providerLower === "jev" || providerLower === "typesafe") {
-        totalTokens = 350_000;
-        totalCost = 0.0147;
-      } else if (providerLower === "google" || providerLower === "gemini") {
-        totalTokens = 485_000;
-        totalCost = 0.85;
-      } else if (providerLower === "openai") {
-        totalTokens = 320_000;
-        totalCost = 0.72;
-      } else if (providerLower === "deepseek") {
-        totalTokens = 650_000;
-        totalCost = 0.45;
-      } else if (providerLower === "groq") {
-        totalTokens = 420_000;
-        totalCost = 0.28;
-      } else {
-        totalTokens = 150_000;
-        totalCost = 0.25;
-      }
-    }
-
-    // 3. Multi-model distribution pool for realistic breakdown visualization
-    const modelPool: string[] = [];
-    if (customModel) {
-      modelPool.push(customModel);
-    } else if (providerLower === "jev" || providerLower === "typesafe") {
-      modelPool.push(
-        "typesafe/jev-latest",
-        "typesafe/jev-latest",
-        "typesafe/jev-1.14",
-        "typesafe/jev-router"
-      );
-    } else if (providerLower === "google" || providerLower === "gemini") {
-      modelPool.push(
-        "gemini-4-argon",
-        "gemini-4-argon",
-        "gemini-2.5-pro",
-        "gemini-2.5-flash",
-        "gemini-2.0-flash",
-        "gemini-1.5-pro",
-        "gemini-2.0-flash-thinking"
-      );
-    } else if (providerLower === "openai") {
-      modelPool.push("gpt-4o", "gpt-4o-mini", "o1-mini", "gpt-4-turbo");
-    } else if (providerLower === "openrouter") {
-      modelPool.push(
-        "anthropic/claude-3.5-sonnet",
-        "deepseek/deepseek-r1:free",
-        "google/gemini-2.0-flash-exp:free",
-        "meta-llama/llama-3.3-70b-instruct",
-        "mistralai/mistral-large"
-      );
-    } else if (providerLower === "groq") {
-      modelPool.push(
-        "llama-3.3-70b-versatile",
-        "llama-3.1-8b-instant",
-        "mixtral-8x7b-32768",
-        "gemma2-9b-it"
-      );
-    } else if (providerLower === "nvidia") {
-      modelPool.push(
-        "meta/llama-3.1-70b-instruct",
-        "nvidia/nemotron-4-340b-instruct",
-        "mistralai/mistral-nemo-12b-instruct"
-      );
-    } else {
-      modelPool.push(`${token.provider}/default`);
-    }
-
-    const callersPool = [
-      "Cursor IDE",
-      "Portal Web (token-hub-two.vercel.app)",
-      "Agente Python SDK",
-      "Claude Code CLI",
-      "API Gateway v1",
-    ];
-
-    const dailyBaseTokens = Math.floor(totalTokens / days);
-    const dailyBaseCost = totalCost / days;
-
-    for (let i = days - 1; i >= 0; i--) {
-      // Natural weekly variance (lower on weekends, peak mid-week)
-      const dayOfWeek = (new Date(now - i * DAY_MS)).getDay();
-      const isWeekend = dayOfWeek === 0 || dayOfWeek === 6;
-      const weeklyFactor = isWeekend ? 0.35 + Math.random() * 0.3 : 0.85 + Math.random() * 0.45;
-      const dayTokens = Math.max(Math.round(dailyBaseTokens * weeklyFactor), 20);
-      const dayCost = Number((dailyBaseCost * weeklyFactor).toFixed(4));
-      const timestamp = new Date(now - i * DAY_MS).toISOString();
-
-      const selectedModel = modelPool[i % modelPool.length];
-      const selectedCaller = callersPool[i % callersPool.length];
-
-      await adapter.addSnapshot(token.id, {
-        tokensUsed: dayTokens,
-        cost: dayCost,
-        model: selectedModel,
-        inputTokens: Math.round(dayTokens * 0.72),
-        outputTokens: Math.round(dayTokens * 0.28),
-        provider: token.provider,
-        caller: selectedCaller,
-        endpoint: "/api/v1/chat/completions",
-        timestamp,
-      });
-    }
-
-    await adapter.updateToken({
-      id: token.id,
-      totalCost: Number((token.totalCost + totalCost).toFixed(4)),
+    // An aggregate total has no per-day, model, or caller breakdown. Save it once
+    // with an explicit label instead of inventing a daily distribution.
+    await adapter.addSnapshot(token.id, {
+      tokensUsed: data.totalTokens!,
+      cost: data.totalCost!,
+      model: data.model ?? null,
+      inputTokens: 0,
+      outputTokens: 0,
+      provider: token.provider,
+      caller: "Importación manual (agregado)",
+      endpoint: "manual://aggregate-import",
+      timestamp: new Date().toISOString(),
     });
 
-    return { ok: true, days, totalTokens, totalCost };
+    return {
+      ok: true,
+      days: 1,
+      totalTokens: data.totalTokens!,
+      totalCost: data.totalCost!,
+      message: "Totales importados como un único registro agregado; no se inventó un desglose diario.",
+    };
   });
-
 export const copyTokenKey = createServerFn({ method: "POST" })
   .validator((tokenId: string) => tokenId)
   .handler(async ({ data: tokenId }) => {
@@ -362,6 +252,88 @@ export const sendTestTelegramAlertFn = createServerFn({ method: "POST" })
     return await sendTestTelegramAlert(data);
   });
 
+type ProviderUsageCheck = {
+  ok: boolean;
+  snapshotsAdded: 0;
+  totalCost: number;
+  message: string;
+  providerUsage?: { tokensUsed: number; cost: number; period: string; tokensApproximate: boolean };
+};
+
+async function checkProviderUsage(token: {
+  provider: string;
+  encryptedValue: string;
+  publicKey?: string | null;
+  trackingKey?: string | null;
+  baseUrl?: string | null;
+  totalCost: number;
+}): Promise<ProviderUsageCheck> {
+  const provider = getProviderBySlug(token.provider);
+  if (!provider) {
+    return {
+      ok: false,
+      snapshotsAdded: 0,
+      totalCost: token.totalCost,
+      message: `No hay una integración de uso disponible para ${token.provider}.`,
+    };
+  }
+
+  try {
+    const usage = await provider.fetchUsage({
+      apiKey: decrypt(token.encryptedValue),
+      publicKey: token.publicKey ? decrypt(token.publicKey) : null,
+      trackingKey: token.trackingKey ? decrypt(token.trackingKey) : null,
+      baseUrl: token.baseUrl ?? null,
+    });
+    const raw = usage.raw ?? {};
+    const error = typeof raw.error === "string" ? raw.error : null;
+    const status = typeof raw.status === "number" ? raw.status : null;
+
+    if (error || (status !== null && status >= 400)) {
+      return {
+        ok: false,
+        snapshotsAdded: 0,
+        totalCost: token.totalCost,
+        message: error || `${provider.name} respondió HTTP ${status}.`,
+      };
+    }
+
+    if (raw.usageSupported !== true) {
+      return {
+        ok: false,
+        snapshotsAdded: 0,
+        totalCost: token.totalCost,
+        message: `${provider.name} no ofrece una integración verificable de consumo. Las llamadas por el Gateway sí se registran en tiempo real.`,
+      };
+    }
+
+    const period = typeof raw.usagePeriod === "string" ? raw.usagePeriod : "provider_reported";
+    const reportedCost = Number.isFinite(usage.cost) ? usage.cost : 0;
+    const reportedTokens = Number.isFinite(usage.tokensUsed) ? usage.tokensUsed : 0;
+    const tokensApproximate = raw.tokensApproximate === true;
+
+    return {
+      ok: true,
+      snapshotsAdded: 0,
+      totalCost: token.totalCost,
+      providerUsage: {
+        tokensUsed: reportedTokens,
+        cost: reportedCost,
+        period,
+        tokensApproximate,
+      },
+      message: `${provider.name} reporta ${tokensApproximate ? "aproximadamente " : ""}${reportedTokens.toLocaleString()} tokens y $${reportedCost.toFixed(4)} para ${period}. Es un dato agregado del proveedor; no se suma al historial para evitar duplicados.`,
+    };
+  } catch (err: any) {
+    return {
+      ok: false,
+      snapshotsAdded: 0,
+      totalCost: token.totalCost,
+      message: err?.message || `No se pudo consultar el uso de ${provider.name}.`,
+    };
+  }
+}
+
 export const syncTokenUsage = createServerFn({ method: "POST" })
   .validator((input: { tokenId: string; forceModel?: string }) => input)
   .handler(async ({ data }) => {
@@ -369,186 +341,8 @@ export const syncTokenUsage = createServerFn({ method: "POST" })
     const adapter = await loadAdapter();
     const token = await adapter.getToken(data.tokenId);
     if (!token) throw new Error("Token no encontrado");
-
-    const providerLower = token.provider.toLowerCase().trim();
-    const now = Date.now();
-    const DAY_MS = 24 * 60 * 60 * 1000;
-
-    // Fetch existing snapshots to find the latest recorded date
-    const existingSnapshots = await adapter.getSnapshots(token.id);
-    let latestTimestamp = 0;
-    for (const snap of existingSnapshots) {
-      const t = new Date(snap.timestamp).getTime();
-      if (!isNaN(t) && t > latestTimestamp) {
-        latestTimestamp = t;
-      }
-    }
-
-    // Determine how many days are missing up to today
-    let daysToSync = 1;
-    if (latestTimestamp > 0) {
-      const diffMs = now - latestTimestamp;
-      daysToSync = Math.max(1, Math.min(Math.floor(diffMs / DAY_MS), 30));
-    } else {
-      daysToSync = 14;
-    }
-
-    const callersPool = [
-      "Cursor IDE",
-      "Antigravity",
-      "Portal Web (token-hub-two.vercel.app)",
-      "Agente Python SDK",
-      "Claude Code CLI",
-    ];
-
-    let snapshotsAdded = 0;
-    let addedCost = 0;
-
-    if (providerLower === "google" || providerLower === "gemini") {
-      // Prioritize gemini-4-argon along with gemini-2.5-pro and flash
-      const googleModelPool = [
-        "gemini-4-argon",
-        "gemini-4-argon",
-        "gemini-4-argon",
-        "gemini-2.5-pro",
-        "gemini-2.5-flash",
-        "gemini-2.0-flash-thinking",
-      ];
-
-      for (let i = daysToSync; i >= 0; i--) {
-        const timestamp = new Date(now - i * DAY_MS).toISOString();
-        const dayStr = timestamp.slice(0, 10);
-
-        const existingForDay = existingSnapshots.filter(
-          (s) => new Date(s.timestamp).toISOString().slice(0, 10) === dayStr
-        );
-
-        // If today or if missing gemini-4-argon on this day
-        const hasArgon = existingForDay.some((s) => (s.model || "").includes("argon"));
-        if (!hasArgon || i === 0) {
-          const selectedModel = data.forceModel || googleModelPool[i % googleModelPool.length];
-          const isArgon = selectedModel.includes("argon");
-
-          const tokensUsed = isArgon
-            ? Math.floor(22_000 + Math.random() * 26_000)
-            : Math.floor(10_000 + Math.random() * 15_000);
-
-          const inputTokens = Math.round(tokensUsed * 0.74);
-          const outputTokens = Math.round(tokensUsed * 0.26);
-          const costRate = isArgon ? inputTokens * 0.000002 + outputTokens * 0.000008 : tokensUsed * 0.0000015;
-          const cost = Number(costRate.toFixed(4));
-          const caller = callersPool[i % callersPool.length];
-
-          await adapter.addSnapshot(token.id, {
-            tokensUsed,
-            cost,
-            model: selectedModel,
-            inputTokens,
-            outputTokens,
-            provider: "google",
-            caller,
-            endpoint: "/api/v1/chat/completions",
-            timestamp,
-          });
-
-          snapshotsAdded++;
-          addedCost += cost;
-        }
-      }
-    } else if (providerLower === "openrouter") {
-      try {
-        const { decrypt } = await import("../lib/crypto");
-        const key = decrypt(token.encryptedValue);
-        const res = await fetch("https://openrouter.ai/api/v1/key", {
-          headers: { Authorization: `Bearer ${key}` },
-        });
-        if (res.ok) {
-          const kd = (await res.json())?.data || {};
-          const usage = kd.usage || 0;
-          const tokens = Math.max(Math.round(usage * 600_000), 25_000);
-          const cost = Number((usage * 0.15).toFixed(4));
-
-          await adapter.addSnapshot(token.id, {
-            tokensUsed: tokens,
-            cost,
-            model: "anthropic/claude-3.5-sonnet",
-            inputTokens: Math.round(tokens * 0.7),
-            outputTokens: Math.round(tokens * 0.3),
-            provider: "openrouter",
-            caller: "Cursor IDE",
-            endpoint: "https://openrouter.ai/api/v1/chat/completions",
-            timestamp: new Date().toISOString(),
-          });
-          snapshotsAdded++;
-          addedCost += cost;
-        }
-      } catch {}
-    } else if (providerLower === "jev" || providerLower === "typesafe") {
-      const jevModelPool = [
-        "typesafe/jev-latest",
-        "typesafe/jev-latest",
-        "typesafe/jev-1.14",
-        "typesafe/jev-router",
-      ];
-      for (let i = daysToSync; i >= 0; i--) {
-        const timestamp = new Date(now - i * DAY_MS).toISOString();
-        const selectedModel = data.forceModel || jevModelPool[i % jevModelPool.length];
-        const tokensUsed = Math.floor(18_000 + Math.random() * 25_000);
-        const cost = Number(((tokensUsed / 1_000_000) * 0.042).toFixed(5));
-        const caller = callersPool[i % callersPool.length];
-
-        await adapter.addSnapshot(token.id, {
-          tokensUsed,
-          cost,
-          model: selectedModel,
-          inputTokens: tokensUsed,
-          outputTokens: 0,
-          provider: "jev",
-          caller,
-          endpoint: "/api/alpha/decisions",
-          timestamp,
-        });
-
-        snapshotsAdded++;
-        addedCost += cost;
-      }
-    } else {
-      const tokensUsed = Math.floor(12_000 + Math.random() * 18_000);
-      const cost = Number((tokensUsed * 0.000002).toFixed(4));
-      const modelCandidate = data.forceModel || (token.selectedModels && token.selectedModels.length > 0 ? token.selectedModels[0] : `${token.provider}/default`);
-      await adapter.addSnapshot(token.id, {
-        tokensUsed,
-        cost,
-        model: modelCandidate,
-        inputTokens: Math.round(tokensUsed * 0.7),
-        outputTokens: Math.round(tokensUsed * 0.3),
-        provider: token.provider,
-        caller: "Cursor IDE",
-        endpoint: "/api/v1/chat/completions",
-        timestamp: new Date().toISOString(),
-      });
-      snapshotsAdded++;
-      addedCost += cost;
-    }
-
-    const updatedToken = await adapter.getToken(token.id);
-    const newTotalCost = updatedToken?.totalCost || Number((token.totalCost + addedCost).toFixed(4));
-
-    await adapter.addAudit({
-      tokenId: token.id,
-      tokenName: token.name,
-      action: "sync_usage",
-      detail: `// Usos sincronizados: +${snapshotsAdded} registros (modelo ${data.forceModel || (providerLower === "google" ? "gemini-4-argon" : providerLower === "jev" ? "typesafe/jev-latest" : "activo")})`,
-    });
-
-    return {
-      ok: true,
-      snapshotsAdded,
-      totalCost: newTotalCost,
-      message: `Usos actualizados con éxito (+${snapshotsAdded} registros sincronizados).`,
-    };
+    return await checkProviderUsage(token);
   });
-
 export const syncAllTokensUsage = createServerFn({ method: "POST" })
   .handler(async () => {
     if (!isAuthorized(getRequest())) return unauthorizedResponse();
@@ -556,18 +350,24 @@ export const syncAllTokensUsage = createServerFn({ method: "POST" })
     const tokens = await adapter.getTokens();
     const activeTokens = tokens.filter((t) => t.active);
 
-    let updatedCount = 0;
+    let availableCount = 0;
+    let failedCount = 0;
     for (const t of activeTokens) {
       try {
-        await syncTokenUsage({ data: { tokenId: t.id } });
-        updatedCount++;
-      } catch {}
+        const result = await checkProviderUsage(t);
+        if (result.ok) availableCount++;
+        else failedCount++;
+      } catch {
+        failedCount++;
+      }
     }
 
     return {
       ok: true,
-      updatedCount,
-      message: `Se sincronizaron los usos de ${updatedCount} tokens activos.`,
+      checkedCount: activeTokens.length,
+      availableCount,
+      failedCount,
+      message: `Se consultaron ${activeTokens.length} tokens activos: ${availableCount} devolvieron uso verificable y ${failedCount} no. No se agregaron snapshots; los totales del proveedor son agregados.`,
     };
   });
 

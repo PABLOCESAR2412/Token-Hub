@@ -58,11 +58,12 @@ function TokenDetail() {
 
   const handleSyncUsos = async () => {
     try {
-      await syncUsos.mutateAsync({ tokenId });
-      setSyncSuccess(true);
+      const result = await syncUsos.mutateAsync({ tokenId });
+      setSyncSuccess(result.ok);
+      alert(result.message);
       setTimeout(() => setSyncSuccess(false), 3000);
     } catch (err: any) {
-      alert("Error al actualizar usos: " + (err.message || err));
+      alert("Error al consultar uso: " + (err.message || err));
     }
   };
 
@@ -152,15 +153,15 @@ function TokenDetail() {
             onClick={handleSyncUsos}
             disabled={syncUsos.isPending}
             className="flex items-center gap-1.5 px-3 py-2 font-mono text-xs uppercase font-bold border border-electric/60 bg-electric/15 hover:bg-electric/25 text-electric transition-colors cursor-pointer disabled:opacity-50"
-            title="Sincronizar y actualizar registros de uso y modelos de este token"
+            title="Consultar el uso agregado informado por el proveedor"
           >
             <RefreshCw size={13} className={syncUsos.isPending ? "animate-spin" : ""} />
             <span>
               {syncUsos.isPending
-                ? "Actualizando usos..."
+                ? "Consultando proveedor..."
                 : syncSuccess
                 ? "Usos actualizados ✓"
-                : "Actualizar Usos"}
+                : "Consultar proveedor"}
             </span>
           </button>
           <button
@@ -385,7 +386,7 @@ function AnalyticsCard({
       setSyncedMsg(res.message);
       setTimeout(() => setSyncedMsg(null), 5000);
     } catch (err: any) {
-      alert("Error al actualizar usos: " + (err.message || err));
+      alert("Error al consultar uso: " + (err.message || err));
     }
   };
 
@@ -401,8 +402,7 @@ function AnalyticsCard({
             [ NO HAY SNAPSHOTS AUN ]
           </div>
           <p className="font-mono text-xs text-bone/60 max-w-md mx-auto leading-relaxed">
-            Las llamadas a través del Gateway Unificado (/api/v1/chat/completions) registran el consumo en tiempo real automáticamente.
-            Para sincronizar y registrar de inmediato los consumos recientes de {provider} (incluyendo Gemini 4 Argon), presiona Actualizar Usos.
+            El gráfico muestra llamadas registradas por el Gateway Unificado (/api/v1/chat/completions). Puedes consultar el total agregado que informa {provider}; no se suma al historial para evitar duplicados.
           </p>
           <div className="flex flex-col items-center gap-3 pt-2">
             <button
@@ -411,11 +411,11 @@ function AnalyticsCard({
               className="flex items-center gap-2 px-4 py-2.5 bg-electric hover:bg-electric/90 text-pure font-mono text-xs uppercase font-bold tracking-wider transition-colors disabled:opacity-50 cursor-pointer shadow-lg shadow-electric/20"
             >
               <RefreshCw className={`w-3.5 h-3.5 ${syncUsage.isPending ? "animate-spin" : ""}`} />
-              {syncUsage.isPending ? "Actualizando Usos..." : "Actualizar Usos"}
+              {syncUsage.isPending ? "Consultando proveedor..." : "Consultar proveedor"}
             </button>
             {syncedMsg && (
-              <div className="font-mono text-xs text-emerald-400 border border-emerald-500/30 bg-emerald-950/30 px-3 py-1">
-                // OK {syncedMsg}
+              <div className="font-mono text-xs text-bone/70 border border-bone/20 bg-pure/40 px-3 py-1">
+                {syncedMsg}
               </div>
             )}
           </div>
@@ -438,18 +438,18 @@ function AnalyticsCard({
         </div>
         <div className="flex items-center gap-3">
           {syncedMsg && (
-            <span className="font-mono text-[11px] text-emerald-400 animate-pulse">
+            <span className="font-mono text-[11px] text-bone/70">
               {syncedMsg}
             </span>
           )}
           <button
             onClick={handleSync}
             disabled={syncUsage.isPending}
-            title="Sincronizar y actualizar registros de uso"
+            title="Consultar el total agregado del proveedor; no modifica el historial"
             className="flex items-center gap-1.5 font-mono text-xs uppercase text-electric border border-electric/40 bg-electric/10 hover:bg-electric/20 px-3 py-1.5 transition-colors disabled:opacity-50 cursor-pointer"
           >
             <RefreshCw className={`w-3 h-3 ${syncUsage.isPending ? "animate-spin" : ""}`} />
-            <span>{syncUsage.isPending ? "Actualizando..." : "Actualizar Usos"}</span>
+            <span>{syncUsage.isPending ? "Consultando..." : "Consultar proveedor"}</span>
           </button>
         </div>
       </div>

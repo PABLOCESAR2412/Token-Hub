@@ -1,26 +1,18 @@
 import type { ProviderAdapter, ProviderUsage, ProviderContext } from "./index";
 
-// OpenCode Zen - simulated provider for demo/dev use
-// In production, replace with real API endpoint
+// OpenCode Zen has no implemented usage endpoint. Keep it explicit instead of
+// returning fabricated values that could be mistaken for provider telemetry.
 export const opencodeZenProvider: ProviderAdapter = {
   name: "OpenCode Zen",
   slug: "opencode-zen",
   fetchUsage: async (_ctx: ProviderContext): Promise<ProviderUsage> => {
-    try {
-      // Simulated usage - in production, call the real API
-      // For now, return random usage data that changes over time
-      const now = Date.now();
-      const dayOfYear = Math.floor(now / 86400000);
-      const tokensUsed = 100 + (dayOfYear % 30) * 50;
-      const cost = +(0.5 + (dayOfYear % 30) * 0.1).toFixed(2);
-
-      return {
-        tokensUsed,
-        cost,
-        raw: { simulated: true, note: "Replace with real OpenCode Zen API" },
-      };
-    } catch (err: any) {
-      return { tokensUsed: 0, cost: 0, raw: { error: err.message } };
-    }
+    return {
+      tokensUsed: 0,
+      cost: 0,
+      raw: {
+        usageSupported: false,
+        note: "No usage endpoint is configured for OpenCode Zen.",
+      },
+    };
   },
 };

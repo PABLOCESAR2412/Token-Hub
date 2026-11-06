@@ -4,12 +4,20 @@ import { api } from "../convex/_generated/api.js";
 
 const prisma = new PrismaClient();
 
-const CONVEX_URLS = [
-  "https://prestigious-fennec-799.convex.cloud",
-  "https://proficient-raccoon-550.convex.cloud",
-];
+const CONVEX_URLS = (process.env.CONVEX_URLS || "")
+  .split(",")
+  .map((url) => url.trim())
+  .filter(Boolean);
+const serviceSecret = process.env.ATH_SERVICE_SECRET?.trim();
 
 async function main() {
+  if (!serviceSecret) {
+    throw new Error("Set ATH_SERVICE_SECRET in the environment before migrating.");
+  }
+  if (CONVEX_URLS.length === 0) {
+    throw new Error("Set CONVEX_URLS to one or more comma-separated Convex deployment URLs.");
+  }
+
   console.log("Reading data from Supabase Postgres...");
 
   const [authRows, providers, tokens, snapshots, audits] = await Promise.all([
@@ -98,6 +106,7 @@ async function main() {
     console.log(`Migrating data to Convex deployment: ${url}`);
     const client = new ConvexHttpClient(url);
     const result = await client.mutation(api.migration.importSupabaseData, {
+      serviceSecret,
       authConfig: authPayload,
       providers: providersPayload,
       tokens: tokensPayload,

@@ -162,6 +162,7 @@ export const supabaseAdapter: StorageAdapter = {
     if (input.maxUsd !== undefined) data.maxUsd = input.maxUsd ?? null;
     if (input.tags !== undefined) data.tags = input.tags;
     if (input.agent !== undefined) data.agent = input.agent ?? null;
+    if (input.totalCost !== undefined) data.totalCost = input.totalCost;
     if (input.provider !== undefined) {
       const provider = await prisma.provider.upsert({
         where: { name: input.provider },

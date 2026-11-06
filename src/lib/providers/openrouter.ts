@@ -67,6 +67,9 @@ export const openRouterProvider: ProviderAdapter = {
         tokensUsed,
         cost,
         raw: {
+          usageSupported: true,
+          usagePeriod: "all_time",
+          tokensApproximate: true,
           usage,
           daily,
           weekly,

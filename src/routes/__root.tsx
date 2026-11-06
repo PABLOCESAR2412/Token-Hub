@@ -13,6 +13,8 @@ import { useSession } from "../lib/use-session";
 import { ChangePasswordDialog } from "../components/ChangePasswordDialog";
 import { TelegramSettingsDialog } from "../components/TelegramSettingsDialog";
 import { McpConnectorDialog } from "../components/McpConnectorDialog";
+import { VersionChangelogModal } from "../components/VersionChangelogModal";
+import { getCurrentVersion } from "../lib/version";
 import { Bell, Server } from "lucide-react";
 import "../global.css";
 
@@ -65,6 +67,8 @@ function RootComponent() {
 function AppLayout() {
   const isDemo = process.env.APP_MODE === "demo";
   const isProd = !isDemo;
+  const [showChangelog, setShowChangelog] = React.useState(false);
+  const currentVersion = getCurrentVersion();
 
   const inner = (
     <div className="min-h-screen flex flex-col">
@@ -75,12 +79,20 @@ function AppLayout() {
             Agent <span className="text-electric">Token Hub</span>
           </p>
         </div>
-        <div className="flex items-center gap-6 font-mono text-xs uppercase">
+        <div className="flex items-center gap-4 sm:gap-6 font-mono text-xs uppercase">
           <span className="hidden md:flex items-center gap-2">
             <span className="w-1.5 h-1.5 rounded-full bg-electric animate-pulse" />
             SYS. STATUS:
             <span className="text-electric font-bold">ONLINE</span>
           </span>
+          <button
+            onClick={() => setShowChangelog(true)}
+            className="flex items-center gap-1.5 border border-bone/20 hover:border-electric px-2.5 py-1 text-bone/70 hover:text-electric transition-colors cursor-pointer group rounded"
+            title="Haz clic para ver qué cambios se hicieron en esta actualización"
+          >
+            <span className="text-bone/40 group-hover:text-electric text-[10px]">VER:</span>
+            <span className="text-electric font-bold">v{currentVersion}</span>
+          </button>
           <span className="border border-bone/20 px-2 py-1 text-bone/60">
             MODE: <span className="text-electric">{isProd ? "production" : "demo"}</span>
           </span>
@@ -90,6 +102,7 @@ function AppLayout() {
       <main className="flex-1 w-full max-w-[1440px] mx-auto px-6 lg:px-8 py-8 lg:py-12 min-w-0">
         {isProd ? <AuthGate /> : <Outlet />}
       </main>
+      <VersionChangelogModal open={showChangelog} onClose={() => setShowChangelog(false)} />
       <footer className="border-t border-bone/20 px-6 lg:px-8 py-5 flex flex-col sm:flex-row items-center justify-between gap-2 bg-stone/90 backdrop-blur">
         <p className="font-mono text-xs text-bone/40 uppercase tracking-widest">
           Hecho por{" "}

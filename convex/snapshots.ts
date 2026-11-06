@@ -1,19 +1,27 @@
 import { query, mutation } from "./_generated/server";
 import { v } from "convex/values";
+import { requireServiceSecret } from "./authz";
 
 export const listByToken = query({
-  args: { tokenId: v.string() },
+  args: {
+    serviceSecret: v.string(),
+    tokenId: v.string(),
+    limit: v.optional(v.number()),
+  },
   handler: async (ctx, args) => {
+    requireServiceSecret(args.serviceSecret);
+    const limit = args.limit ?? 300;
     return await ctx.db
       .query("usageSnapshots")
       .withIndex("by_tokenId", (q) => q.eq("tokenId", args.tokenId))
       .order("desc")
-      .collect();
+      .take(limit);
   },
 });
 
 export const add = mutation({
   args: {
+    serviceSecret: v.string(),
     snapshotId: v.string(),
     tokenId: v.string(),
     tokensUsed: v.number(),
@@ -29,17 +37,19 @@ export const add = mutation({
     timestamp: v.string(),
   },
   handler: async (ctx, args) => {
-    const id = await ctx.db.insert("usageSnapshots", args);
+    requireServiceSecret(args.serviceSecret);
+    const { serviceSecret: _serviceSecret, ...snapshot } = args;
+    const id = await ctx.db.insert("usageSnapshots", snapshot);
 
     // Update totalCost on the token
     const token = await ctx.db
       .query("tokens")
-      .withIndex("by_tokenId", (q) => q.eq("tokenId", args.tokenId))
+      .withIndex("by_tokenId", (q) => q.eq("tokenId", snapshot.tokenId))
       .first();
 
     if (token) {
       await ctx.db.patch(token._id, {
-        totalCost: +(token.totalCost + args.cost).toFixed(4),
+        totalCost: +(token.totalCost + snapshot.cost).toFixed(4),
       });
     }
 

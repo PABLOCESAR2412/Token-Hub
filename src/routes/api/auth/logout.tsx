@@ -1,14 +1,14 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { setCookie } from "@tanstack/react-start/server";
-import { COOKIE_NAME } from "../../../lib/auth";
+import { COOKIE_NAME, isSecureContext } from "../../../lib/auth";
 
 export const Route = createFileRoute("/api/auth/logout")({
   server: {
     handlers: {
-      POST: async () => {
+      POST: async ({ request }) => {
         setCookie(COOKIE_NAME, "", {
           httpOnly: true,
-          secure: process.env.VERCEL === "1",
+          secure: isSecureContext(request),
           sameSite: "lax",
           path: "/",
           maxAge: 0,

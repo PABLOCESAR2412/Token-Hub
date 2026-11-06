@@ -5,18 +5,16 @@ const IV_LENGTH = 16;
 const SALT_LENGTH = 64;
 const TAG_LENGTH = 16;
 
-/**
- * Encrypts a string using AES-256-GCM.
- * Depends on ENCRYPTION_KEY environment variable.
- */
-const DEFAULT_ENCRYPTION_KEY = "46a0211d60b52c17bea4eec559926021dc53263d97f211c792e6f6ccc8420f6c";
-
 function getKey(): string {
   const envVal = process.env.ENCRYPTION_KEY?.trim();
   if (envVal && envVal.length === 64 && /^[0-9a-fA-F]{64}$/.test(envVal)) {
     return envVal;
   }
-  return DEFAULT_ENCRYPTION_KEY;
+
+  throw new Error(
+    "ENCRYPTION_KEY must be configured as a 64-character hexadecimal string (32 bytes for AES-256-GCM). " +
+      "Generate one with: node -e \"console.log(require('crypto').randomBytes(32).toString('hex'))\""
+  );
 }
 
 /**
@@ -61,3 +59,12 @@ export function decrypt(encryptedHex: string): string {
   const decrypted = Buffer.concat([decipher.update(encrypted), decipher.final()]);
   return decrypted.toString("utf8");
 }
+
+/**
+ * Checks if a valid 64-character hex ENCRYPTION_KEY is configured in the environment.
+ */
+export function isEncryptionKeyConfigured(): boolean {
+  const envVal = process.env.ENCRYPTION_KEY?.trim();
+  return Boolean(envVal && envVal.length === 64 && /^[0-9a-fA-F]{64}$/.test(envVal));
+}
+

@@ -14,7 +14,9 @@ import { ConfirmDialog, useConfirmDialog } from "../components/ConfirmDialog";
 import { TotpSetup } from "../components/TotpSetup";
 import { CopyKeyButton } from "../components/CopyKeyButton";
 import { McpConnectorDialog } from "../components/McpConnectorDialog";
-import { Trash2, Eye, Pause, Play, Download, Search, Server, RefreshCw } from "lucide-react";
+import { GatewayPlaygroundModal } from "../components/GatewayPlaygroundModal";
+import { GatewayApiKeysPanel } from "../components/GatewayApiKeysPanel";
+import { Trash2, Eye, Pause, Play, Download, Search, Server, RefreshCw, Zap, Layers } from "lucide-react";
 
 export const Route = createFileRoute("/")({
   component: Dashboard,
@@ -31,17 +33,19 @@ function Dashboard() {
   const [search, setSearch] = React.useState("");
   const [pendingDelete, setPendingDelete] = React.useState<Token | null>(null);
   const [showMcp, setShowMcp] = React.useState(false);
+  const [showPlayground, setShowPlayground] = React.useState(false);
   const { dialog, open, close } = useConfirmDialog();
   const syncAllUsos = useSyncAllTokensUsage();
   const [syncAllSuccess, setSyncAllSuccess] = React.useState(false);
 
   const handleSyncAllUsos = async () => {
     try {
-      await syncAllUsos.mutateAsync();
-      setSyncAllSuccess(true);
+      const result = await syncAllUsos.mutateAsync();
+      setSyncAllSuccess(result.availableCount > 0);
+      alert(result.message);
       setTimeout(() => setSyncAllSuccess(false), 3000);
     } catch (err: any) {
-      alert("Error al actualizar usos: " + (err.message || err));
+      alert("Error al consultar uso: " + (err.message || err));
     }
   };
 
@@ -329,10 +333,10 @@ function Dashboard() {
             onClick={handleSyncAllUsos}
             disabled={syncAllUsos.isPending}
             className="flex items-center gap-1.5 border border-bone/20 hover:border-electric px-3 py-2 font-mono text-sm uppercase text-bone/70 hover:text-electric transition-colors cursor-pointer disabled:opacity-50"
-            title="Sincronizar y actualizar usos de todos los tokens"
+            title="Consultar uso agregado del proveedor sin modificar el historial"
           >
             <RefreshCw size={14} className={syncAllUsos.isPending ? "animate-spin text-electric" : "text-electric"} />
-            <span>{syncAllUsos.isPending ? "Actualizando..." : syncAllSuccess ? "Usos OK ✓" : "Actualizar Usos"}</span>
+            <span>{syncAllUsos.isPending ? "Consultando..." : syncAllSuccess ? "Consulta lista" : "Consultar uso"}</span>
           </button>
           <button
             onClick={exportCsv}
@@ -349,6 +353,24 @@ function Dashboard() {
             <Server size={14} className="text-electric" />
             <span>MCP</span>
           </button>
+          <button
+            onClick={() => setShowPlayground(true)}
+            className="flex items-center gap-1.5 border border-electric/40 bg-electric/10 hover:border-electric hover:bg-electric/20 px-3 py-2 font-mono text-sm uppercase text-electric transition-all cursor-pointer"
+            title="Probar Gateway en vivo con Streaming y Caché"
+          >
+            <Zap size={14} className="text-electric" />
+            <span>Playground</span>
+          </button>
+          {process.env.APP_STORAGE === "convex" && (
+            <Link
+              to="/gateway"
+              className="flex items-center gap-1.5 border border-electric/30 bg-electric/5 hover:border-electric px-3 py-2 font-mono text-sm uppercase text-electric transition-colors"
+              title="Ver modelos compartidos y uso agregado por proveedor"
+            >
+              <Layers size={14} />
+              <span>Uso por modelo</span>
+            </Link>
+          )}
           <Link
             to="/token/new"
             className="bg-electric text-bone px-4 py-2 font-mono text-sm uppercase font-bold hover:opacity-90 transition-colors"
@@ -369,6 +391,8 @@ function Dashboard() {
           </div>
         ))}
       </div>
+
+      {process.env.APP_STORAGE === "convex" && <GatewayApiKeysPanel />}
 
       <div className="border border-bone/20 bg-pure/40 overflow-hidden">
         <table className="w-full text-sm">
@@ -426,6 +450,11 @@ function Dashboard() {
         }}
       />
       {showMcp && <McpConnectorDialog onClose={() => setShowMcp(false)} />}
+      <GatewayPlaygroundModal
+        open={showPlayground}
+        onClose={() => setShowPlayground(false)}
+        tokens={tokens}
+      />
 
       <div className="bg-pure/40 border border-bone/20 p-5">
         <TotpSetup />

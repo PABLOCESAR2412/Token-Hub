@@ -406,6 +406,7 @@ export function useSyncTokenUsage() {
       snapshotsAdded: number;
       totalCost: number;
       message: string;
+      providerUsage?: { tokensUsed: number; cost: number; period: string; tokensApproximate: boolean };
     }> => {
       const fns = await getServerFns();
       return (await callServer(() => fns.syncTokenUsage({ data: input }))) as {
@@ -413,6 +414,7 @@ export function useSyncTokenUsage() {
         snapshotsAdded: number;
         totalCost: number;
         message: string;
+        providerUsage?: { tokensUsed: number; cost: number; period: string; tokensApproximate: boolean };
       };
     },
     onSuccess: (_data, vars) => {
@@ -429,13 +431,17 @@ export function useSyncAllTokensUsage() {
   return useMutation({
     mutationFn: async (): Promise<{
       ok: boolean;
-      updatedCount: number;
+      checkedCount: number;
+      availableCount: number;
+      failedCount: number;
       message: string;
     }> => {
       const fns = await getServerFns();
       return (await callServer(() => fns.syncAllTokensUsage())) as {
         ok: boolean;
-        updatedCount: number;
+        checkedCount: number;
+        availableCount: number;
+        failedCount: number;
         message: string;
       };
     },

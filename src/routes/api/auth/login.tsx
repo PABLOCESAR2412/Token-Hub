@@ -1,14 +1,34 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { setCookie } from "@tanstack/react-start/server";
-import { createSessionToken, COOKIE_NAME } from "../../../lib/auth";
-import { DEFAULT_PASSWORD } from "../../../lib/credentials";
+import { createSessionToken, COOKIE_NAME, isSecureContext } from "../../../lib/auth";
 import { verifyOwnerPassword, getAuthState } from "../../../lib/credentials";
+import { checkRateLimit, resetRateLimit, getClientIp } from "../../../lib/rate-limiter";
 
 export const Route = createFileRoute("/api/auth/login")({
   server: {
     handlers: {
       POST: async ({ request }) => {
         try {
+          const clientIp = getClientIp(request);
+          const rateLimit = checkRateLimit(`login:${clientIp}`, {
+            maxAttempts: 5,
+            windowMs: 5 * 60 * 1000,
+          });
+
+          if (!rateLimit.allowed) {
+            return Response.json(
+              {
+                error: `// Demasiados intentos fallidos. Bloqueado temporalmente por seguridad. Reintenta en ${rateLimit.retryAfterSeconds} segundos.`,
+              },
+              {
+                status: 429,
+                headers: {
+                  "Retry-After": String(rateLimit.retryAfterSeconds),
+                },
+              }
+            );
+          }
+
           const body = (await request.json().catch(() => ({}))) as { password?: string };
           if (!body.password) {
             return Response.json({ error: "Password required" }, { status: 400 });
@@ -16,22 +36,22 @@ export const Route = createFileRoute("/api/auth/login")({
 
           const ok = await verifyOwnerPassword(body.password);
           if (!ok) {
-            const state = await getAuthState();
             return Response.json(
               {
-                error: state.mustChangePassword
-                  ? `// Contraseña incorrecta. Usa la contraseña inicial por defecto: ${DEFAULT_PASSWORD}`
-                  : "// Contraseña incorrecta",
+                error: "// Contraseña incorrecta",
               },
               { status: 401 }
             );
           }
 
+          // Reset failed attempts on successful authentication
+          resetRateLimit(`login:${clientIp}`);
+
           const { mustChangePassword } = await getAuthState();
 
           setCookie(COOKIE_NAME, createSessionToken(), {
             httpOnly: true,
-            secure: process.env.VERCEL === "1",
+            secure: isSecureContext(request),
             sameSite: "lax",
             path: "/",
             maxAge: 60 * 60 * 24 * 7,
@@ -41,7 +61,7 @@ export const Route = createFileRoute("/api/auth/login")({
             ok: true,
             mustChangePassword,
             expiresAt: Math.floor(Date.now() / 1000) + 60 * 60 * 24 * 7,
-            hint: mustChangePassword ? `Usa la contraseña por defecto: ${DEFAULT_PASSWORD}` : undefined,
+            hint: mustChangePassword ? "Debes cambiar tu contraseña antes de continuar." : undefined,
           });
         } catch (err: any) {
           console.error("Error en /api/auth/login:", err);

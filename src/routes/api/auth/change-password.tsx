@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { getCookie, setCookie } from "@tanstack/react-start/server";
-import { verifySessionToken, sessionKind, createSessionToken, COOKIE_NAME } from "../../../lib/auth";
+import { verifySessionToken, sessionKind, createSessionToken, COOKIE_NAME, isSecureContext } from "../../../lib/auth";
 import { changeOwnerPassword, setOwnerPassword } from "../../../lib/credentials";
 
 export const Route = createFileRoute("/api/auth/change-password")({
@@ -34,7 +34,7 @@ export const Route = createFileRoute("/api/auth/change-password")({
           if (recovery) {
             setCookie(COOKIE_NAME, createSessionToken("session"), {
               httpOnly: true,
-              secure: process.env.VERCEL === "1",
+              secure: isSecureContext(request),
               sameSite: "lax",
               path: "/",
               maxAge: 60 * 60 * 24 * 7,

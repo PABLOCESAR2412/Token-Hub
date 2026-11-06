@@ -65,11 +65,40 @@ export interface InspectOptions {
   baseUrl?: string | null;
 }
 
+interface CacheEntry {
+  data: LiveInspectionResult;
+  expiresAt: number;
+}
+
+const inspectionCache = new Map<string, CacheEntry>();
+const CACHE_TTL_MS = 60 * 1000; // 60s TTL
+
 /**
  * Live Key Inspector: queries the provider's API directly with the decrypted key
  * to evaluate status, plan type, available balance/quota, and retrieve the full model list.
+ * Includes a 60-second in-memory cache to avoid rate limiting on upstream provider APIs.
  */
-export async function inspectProviderKey(opts: InspectOptions): Promise<LiveInspectionResult> {
+export async function inspectProviderKey(
+  opts: InspectOptions,
+  forceRefresh = false
+): Promise<LiveInspectionResult> {
+  const { provider, apiKey, baseUrl } = opts;
+  const slug = provider.toLowerCase().trim();
+  const cacheKey = `${slug}:${apiKey}:${baseUrl || ""}`;
+
+  if (!forceRefresh) {
+    const cached = inspectionCache.get(cacheKey);
+    if (cached && cached.expiresAt > Date.now()) {
+      return cached.data;
+    }
+  }
+
+  const result = await _inspectProviderKeyInternal(opts);
+  inspectionCache.set(cacheKey, { data: result, expiresAt: Date.now() + CACHE_TTL_MS });
+  return result;
+}
+
+async function _inspectProviderKeyInternal(opts: InspectOptions): Promise<LiveInspectionResult> {
   const { provider, apiKey, baseUrl } = opts;
   const now = new Date().toISOString();
   const slug = provider.toLowerCase().trim();
