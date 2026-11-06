@@ -81,7 +81,9 @@ export function GatewayPlaygroundModal({ open, onClose, tokens }: GatewayPlaygro
 
       if (!res.ok) {
         const errJson = await res.json().catch(() => ({}));
-        throw new Error(errJson?.error?.message || `HTTP ${res.status}: Error en Gateway`);
+        const failureMessage = errJson?.error?.message || `HTTP ${res.status}: Error en Gateway`;
+        const diagnostic = [errJson?.error?.code, errJson?.error?.request_id].filter(Boolean).join(" / ");
+        throw new Error(diagnostic ? `${failureMessage} [${diagnostic}]` : failureMessage);
       }
 
       if (stream && res.body) {

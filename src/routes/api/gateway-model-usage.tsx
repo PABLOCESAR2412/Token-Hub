@@ -2,6 +2,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { isAuthorized, isRecoverySession } from "../../lib/auth";
 import { loadAdapter } from "../../lib/storage-adapter";
 import { getUnifiedModelGroups } from "../../lib/proxy/model-groups";
+import { listGatewayApiKeys } from "../../lib/gateway-keys";
 
 const SNAPSHOT_LIMIT_PER_TOKEN = 300;
 
@@ -25,7 +26,7 @@ export const Route = createFileRoute("/api/gateway-model-usage")({
           const adapter = await loadAdapter();
           const tokens = await adapter.getTokens();
           const groups = getUnifiedModelGroups(tokens, true);
-          const tokenIds = [...new Set(groups.flatMap((group) => group.routes.map((route) => route.token.id)))];
+          const tokenIds = [...new Set(tokens.map((token) => token.id))];
           const snapshotResults = await Promise.all(
             tokenIds.map(async (tokenId) => {
               try {
@@ -38,6 +39,78 @@ export const Route = createFileRoute("/api/gateway-model-usage")({
           const snapshotsByToken = new Map(snapshotResults.map((result) => [result.tokenId, result.snapshots]));
           const failedSnapshotReads = snapshotResults.filter((result) => result.failed).length;
           const truncatedTokens = snapshotResults.filter((result) => result.snapshots.length >= SNAPSHOT_LIMIT_PER_TOKEN).length;
+
+          type ClientModelUsage = {
+            model: string;
+            requests: number;
+            inputTokens: number;
+            outputTokens: number;
+            tokensUsed: number;
+            estimatedCost: number;
+            lastUsedAt: string | null;
+          };
+          const clientKeys = new Map<string, { id: string; name: string; models: Map<string, ClientModelUsage> }>();
+
+          for (const result of snapshotResults) {
+            for (const snapshot of result.snapshots) {
+              const marker = snapshot.caller?.match(/^\[gateway-key:([^:\]]+):([^\]]+)\]/);
+              if (!marker) continue;
+              let name = marker[2];
+              try { name = decodeURIComponent(name); } catch {}
+
+              const client = clientKeys.get(marker[1]) ?? {
+                id: marker[1],
+                name,
+                models: new Map<string, ClientModelUsage>(),
+              };
+              const model = snapshot.model || "unknown";
+              const row = client.models.get(model) ?? {
+                model,
+                requests: 0,
+                inputTokens: 0,
+                outputTokens: 0,
+                tokensUsed: 0,
+                estimatedCost: 0,
+                lastUsedAt: null,
+              };
+              row.requests += 1;
+              row.inputTokens += snapshot.inputTokens ?? 0;
+              row.outputTokens += snapshot.outputTokens ?? 0;
+              row.tokensUsed += snapshot.tokensUsed ?? 0;
+              row.estimatedCost += snapshot.cost ?? 0;
+              if (!row.lastUsedAt || snapshot.timestamp > row.lastUsedAt) row.lastUsedAt = snapshot.timestamp;
+              client.models.set(model, row);
+              clientKeys.set(marker[1], client);
+            }
+          }
+
+          const apiKeyRecords = await listGatewayApiKeys();
+          const apiKeys = apiKeyRecords.map((record) => {
+            const client = clientKeys.get(record.id) ?? {
+              id: record.id,
+              name: record.name,
+              models: new Map<string, ClientModelUsage>(),
+            };
+            const models = [...client.models.values()].sort((a, b) => b.requests - a.requests);
+            const totals = models.reduce(
+              (sum, model) => ({
+                requests: sum.requests + model.requests,
+                inputTokens: sum.inputTokens + model.inputTokens,
+                outputTokens: sum.outputTokens + model.outputTokens,
+                tokensUsed: sum.tokensUsed + model.tokensUsed,
+                estimatedCost: sum.estimatedCost + model.estimatedCost,
+              }),
+              { requests: 0, inputTokens: 0, outputTokens: 0, tokensUsed: 0, estimatedCost: 0 }
+            );
+            return {
+              id: client.id,
+              name: client.name,
+              active: record.active && !record.expired,
+              expiresAt: record.expiresAt ?? null,
+              models,
+              totals,
+            };
+          }).sort((a, b) => a.name.localeCompare(b.name));
 
           const models = groups.map((group) => {
             const providers = new Map<string, {
@@ -119,12 +192,19 @@ export const Route = createFileRoute("/api/gateway-model-usage")({
           });
 
           return Response.json(
-            { models, truncatedTokens, failedSnapshotReads, snapshotLimitPerToken: SNAPSHOT_LIMIT_PER_TOKEN },
+            { models, apiKeys, truncatedTokens, failedSnapshotReads, snapshotLimitPerToken: SNAPSHOT_LIMIT_PER_TOKEN },
             { headers: { "Cache-Control": "no-store" } }
           );
         } catch (error) {
-          const message = error instanceof Error ? error.message : "No se pudo cargar el uso por modelo.";
-          return Response.json({ error: message }, { status: 500, headers: { "Cache-Control": "no-store" } });
+          const requestId = globalThis.crypto.randomUUID();
+          console.error("[ATH Gateway] Usage view failed", {
+            requestId,
+            errorName: error instanceof Error ? error.name : "UnknownError",
+          });
+          return Response.json(
+            { error: "No se pudo cargar el uso del gateway.", request_id: requestId },
+            { status: 500, headers: { "Cache-Control": "no-store" } }
+          );
         }
       },
     },

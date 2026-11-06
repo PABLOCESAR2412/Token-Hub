@@ -8,7 +8,7 @@ import { selectPooledToken } from "./pool";
 import { checkAgentCircuitBreaker } from "./circuit-breaker";
 import { applyDlpToMessages } from "./dlp";
 import { getUnifiedModelGroups } from "./model-groups";
-import { isValidGatewayApiKey } from "../gateway-keys";
+import { getGatewayApiKeyIdentity } from "../gateway-keys";
 
 export interface ProxyChatRequest {
   model: string;
@@ -26,6 +26,7 @@ export interface UpstreamTarget {
   headers: Record<string, string>;
   isUnifiedRoute?: boolean;
   fallbackTargets?: UpstreamTarget[];
+  gatewayApiKey?: { id: string; name: string } | null;
 }
 
 // Rough cost per 1M tokens in USD for estimation
@@ -238,7 +239,8 @@ export async function resolveUpstreamTarget(
     Boolean(rawKey) &&
     ((Boolean(masterPassword) && rawKey === masterPassword) ||
       (Boolean(gatewayKey) && rawKey === gatewayKey));
-  const isMasterKey = isConfiguredMasterKey || (await isValidGatewayApiKey(rawKey));
+  const gatewayApiKey = await getGatewayApiKeyIdentity(rawKey);
+  const isMasterKey = isConfiguredMasterKey || Boolean(gatewayApiKey);
   const matchingCredentialToken = isMasterKey ? null : findTokenForCredential(allTokens, rawKey);
   const hasMatchedToken = Boolean(
     matchingCredentialToken || allTokens.some((token) => token.provider.toLowerCase() === rawKey.toLowerCase())
@@ -378,7 +380,7 @@ export async function resolveUpstreamTarget(
         },
       }).catch(console.error);
 
-      return fallback;
+      return { ...fallback, gatewayApiKey };
     }
 
     if (isPaused) {
@@ -393,6 +395,7 @@ export async function resolveUpstreamTarget(
     ...buildTargetForToken(selectedToken, cleanModel),
     isUnifiedRoute,
     fallbackTargets: unifiedFallbackTargets,
+    gatewayApiKey,
   };
 }
 
@@ -456,7 +459,11 @@ async function recordUsageAndEnforceCap(
   target: UpstreamTarget,
   promptTokens: number,
   completionTokens: number,
-  callerInfo?: { caller?: string | null; endpoint?: string | null },
+  callerInfo?: {
+    caller?: string | null;
+    endpoint?: string | null;
+    gatewayApiKey?: { id: string; name: string } | null;
+  },
   latencyMs?: number | null
 ): Promise<{ totalTokens: number; cost: number }> {
   const totalTokens = promptTokens + completionTokens;
@@ -477,7 +484,9 @@ async function recordUsageAndEnforceCap(
       latencyMs: latencyMs ?? null,
       tokensPerSecond,
       provider: target.token.provider,
-      caller: callerInfo?.caller || "Cliente API",
+      caller: callerInfo?.gatewayApiKey
+        ? `[gateway-key:${callerInfo.gatewayApiKey.id}:${encodeURIComponent(callerInfo.gatewayApiKey.name)}] ${callerInfo.caller || "Cliente API"}`
+        : callerInfo?.caller || "Cliente API",
       endpoint: callerInfo?.endpoint || "/api/v1/chat/completions",
     });
 
@@ -634,7 +643,12 @@ async function requestUnifiedRoute(
 export async function forwardChatRequest(
   target: UpstreamTarget,
   body: ProxyChatRequest,
-  callerInfo?: { caller?: string | null; endpoint?: string | null; agent?: string | null }
+  callerInfo?: {
+    caller?: string | null;
+    endpoint?: string | null;
+    agent?: string | null;
+    gatewayApiKey?: { id: string; name: string } | null;
+  }
 ): Promise<Response> {
   const agentIdentifier = callerInfo?.agent || target.token.agent || callerInfo?.caller || "default-agent";
 
@@ -923,6 +937,7 @@ export async function forwardChatRequest(
           {
             caller: callerInfo?.caller ? `${callerInfo.caller} (Stream)` : "Cliente API (Stream)",
             endpoint: callerInfo?.endpoint || "/api/v1/chat/completions",
+            gatewayApiKey: callerInfo?.gatewayApiKey,
           },
           streamDuration
         );

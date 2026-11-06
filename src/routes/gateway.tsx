@@ -22,8 +22,31 @@ interface UnifiedModelUsage {
   totals: ProviderUsage;
 }
 
+interface GatewayApiKeyUsage {
+  id: string;
+  name: string;
+  active: boolean;
+  models: Array<{
+    model: string;
+    requests: number;
+    inputTokens: number;
+    outputTokens: number;
+    tokensUsed: number;
+    estimatedCost: number;
+    lastUsedAt: string | null;
+  }>;
+  totals: {
+    requests: number;
+    inputTokens: number;
+    outputTokens: number;
+    tokensUsed: number;
+    estimatedCost: number;
+  };
+}
+
 interface GatewayUsageResponse {
   models: UnifiedModelUsage[];
+  apiKeys: GatewayApiKeyUsage[];
   truncatedTokens: number;
   failedSnapshotReads: number;
   snapshotLimitPerToken: number;
@@ -76,6 +99,7 @@ function GatewayUsagePage() {
   }
 
   const models = data?.models ?? [];
+  const apiKeys = data?.apiKeys ?? [];
   const totalRequests = models.reduce((sum, model) => sum + model.totals.requests, 0);
   const totalTokens = models.reduce((sum, model) => sum + model.totals.tokensUsed, 0);
   const totalCost = models.reduce((sum, model) => sum + model.totals.estimatedCost, 0);
@@ -126,6 +150,54 @@ function GatewayUsagePage() {
           No se pudieron leer los registros de {data.failedSnapshotReads} API key(s); las sumas mostradas pueden estar incompletas.
         </div>
       )}
+
+      <section className="space-y-3">
+        <div>
+          <h2 className="font-mono text-lg font-bold uppercase text-bone">Uso por API cliente</h2>
+          <p className="mt-1 font-mono text-[11px] text-bone/40">Consumo atribuido a cada API key del gateway, separado por modelo.</p>
+        </div>
+        {apiKeys.length === 0 ? (
+          <div className="border border-dashed border-bone/20 bg-pure/20 p-5 font-mono text-xs text-bone/45">
+            Aún no hay API keys del gateway registradas.
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 xl:grid-cols-2 gap-3">
+            {apiKeys.map((apiKey) => (
+              <section key={apiKey.id} className="border border-bone/20 bg-pure/35 overflow-hidden">
+                <div className="flex flex-wrap items-start justify-between gap-3 border-b border-bone/10 p-4">
+                  <div>
+                    <h3 className="font-mono text-sm font-bold text-electric">{apiKey.name}</h3>
+                    <span className={"mt-1 inline-block border px-1.5 py-0.5 font-mono text-[9px] uppercase " + (apiKey.active ? "border-emerald-500/40 text-emerald-300" : "border-bone/20 text-bone/40")}>
+                      {apiKey.active ? "Activa" : "Inactiva"}
+                    </span>
+                  </div>
+                  <div className="grid grid-cols-3 gap-3 text-right font-mono">
+                    <div><div className="text-[9px] text-bone/35">SOLICITUDES</div><div className="text-xs text-bone">{formatNumber(apiKey.totals.requests)}</div></div>
+                    <div><div className="text-[9px] text-bone/35">TOKENS</div><div className="text-xs text-bone">{formatNumber(apiKey.totals.tokensUsed)}</div></div>
+                    <div><div className="text-[9px] text-bone/35">COSTO</div><div className="text-xs text-emerald-300">{formatUsd(apiKey.totals.estimatedCost)}</div></div>
+                  </div>
+                </div>
+                {apiKey.models.length === 0 ? (
+                  <div className="p-4 font-mono text-[11px] text-bone/40">Sin uso registrado.</div>
+                ) : (
+                  <div className="divide-y divide-bone/10">
+                    {apiKey.models.map((model) => (
+                      <div key={model.model} className="grid grid-cols-2 sm:grid-cols-5 gap-2 p-3 font-mono text-[10px]">
+                        <div className="col-span-2 sm:col-span-1 truncate text-electric" title={model.model}>{model.model}</div>
+                        <div><span className="text-bone/35">REQ.</span><div className="mt-0.5 text-bone">{formatNumber(model.requests)}</div></div>
+                        <div><span className="text-bone/35">TOKENS</span><div className="mt-0.5 text-bone">{formatNumber(model.tokensUsed)}</div></div>
+                        <div><span className="text-bone/35">ENTRADA/SALIDA</span><div className="mt-0.5 text-bone">{formatNumber(model.inputTokens)} / {formatNumber(model.outputTokens)}</div></div>
+                        <div><span className="text-bone/35">COSTO EST.</span><div className="mt-0.5 text-emerald-300">{formatUsd(model.estimatedCost)}</div></div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </section>
+            ))}
+          </div>
+        )}
+        <p className="font-mono text-[10px] text-bone/35">El desglose por API comienza con las nuevas solicitudes; las anteriores no guardaban qué API key cliente las originó.</p>
+      </section>
 
       {loading && !data ? (
         <div className="border border-bone/20 bg-pure/30 p-8 text-center font-mono text-sm text-bone/40">Leyendo uso del gateway...</div>
