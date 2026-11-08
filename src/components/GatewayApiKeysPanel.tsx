@@ -1,6 +1,9 @@
 import * as React from "react";
 import { Check, Copy, KeyRound, Plus, Power, RefreshCw, Wifi } from "lucide-react";
 
+const HERMES_ENDPOINT = "https://token-hub-two.vercel.app/api/v1";
+const HERMES_KEY_ENV = "HERMES_CUSTOM_TOKEN_HUB_TWO_VERCEL_APP_API_KEY";
+
 interface GatewayApiKeySummary {
   id: string;
   name: string;
@@ -27,6 +30,7 @@ export function GatewayApiKeysPanel() {
   const [error, setError] = React.useState<string | null>(null);
   const [notice, setNotice] = React.useState<string | null>(null);
   const [copied, setCopied] = React.useState(false);
+  const [copiedSetup, setCopiedSetup] = React.useState<"endpoint" | "variable" | null>(null);
 
   const loadKeys = React.useCallback(async () => {
     setLoading(true);
@@ -149,6 +153,18 @@ export function GatewayApiKeysPanel() {
     if (newKey) await copySecret(newKey, "API key copiada al portapapeles.");
   };
 
+  const copySetupValue = async (value: string, label: string, slot: "endpoint" | "variable") => {
+    try {
+      await navigator.clipboard.writeText(value);
+      setError(null);
+      setNotice(`${label} copiado al portapapeles.`);
+      setCopiedSetup(slot);
+      window.setTimeout(() => setCopiedSetup(null), 1800);
+    } catch {
+      setError(`No se pudo copiar ${label.toLowerCase()}. Selecciona el valor y c�pialo manualmente.`);
+    }
+  };
+
   return (
     <section className="border border-bone/20 bg-pure/40 p-5 space-y-4">
       <div className="flex items-start justify-between gap-3">
@@ -163,6 +179,55 @@ export function GatewayApiKeysPanel() {
         <button type="button" onClick={() => void loadKeys()} disabled={loading} aria-label="Actualizar API keys" className="border border-bone/20 p-2 text-bone/60 hover:text-electric hover:border-electric disabled:opacity-50">
           <RefreshCw size={14} className={loading ? "animate-spin" : ""} />
         </button>
+      </div>
+
+      <div className="space-y-3 border border-electric/25 bg-electric/[0.04] p-4">
+        <div>
+          <div className="flex items-center gap-2 font-mono text-xs uppercase tracking-wider text-electric">
+            <KeyRound size={13} /> [ CONFIGURACI�N PARA HERMES ]
+          </div>
+          <p className="mt-1 text-xs text-bone/55">Copia estos valores en Configuraci�n  Proveedores  Endpoint personalizado.</p>
+        </div>
+
+        <div className="grid gap-3 md:grid-cols-2">
+          <div className="min-w-0 border border-bone/10 bg-pure/40 p-3">
+            <div className="font-mono text-[10px] uppercase tracking-wider text-bone/40">URL del endpoint</div>
+            <div className="mt-1 flex items-center justify-between gap-2">
+              <code className="break-all text-xs text-bone">{HERMES_ENDPOINT}</code>
+              <button type="button" onClick={() => void copySetupValue(HERMES_ENDPOINT, "URL", "endpoint")} aria-label="Copiar URL del endpoint" className="flex shrink-0 items-center gap-1 border border-electric/30 px-2 py-1 font-mono text-[10px] uppercase text-electric hover:bg-electric/10">
+                {copiedSetup === "endpoint" ? <Check size={12} /> : <Copy size={12} />} Copiar
+              </button>
+            </div>
+          </div>
+
+          <div className="border border-bone/10 bg-pure/40 p-3">
+            <div className="font-mono text-[10px] uppercase tracking-wider text-bone/40">Modo de API</div>
+            <code className="mt-1 block text-xs text-bone">Chat Completions</code>
+          </div>
+
+          <div className="border border-bone/10 bg-pure/40 p-3">
+            <div className="font-mono text-[10px] uppercase tracking-wider text-bone/40">Modelo predeterminado</div>
+            <div className="mt-1 text-xs text-bone">Elige el ID exacto de un modelo activo del Hub.</div>
+            <code className="mt-1 block text-[11px] text-electric">Ejemplo: jev/jev-0a14</code>
+          </div>
+
+          <div className="border border-bone/10 bg-pure/40 p-3">
+            <div className="font-mono text-[10px] uppercase tracking-wider text-bone/40">Clave API</div>
+            <p className="mt-1 text-xs text-bone">Usa una clave <strong className="text-emerald-300">Activa</strong> de esta lista. C�piala con el bot�n de la clave; empieza con <code className="text-electric">ath_live_</code>.</p>
+            <p className="mt-1 text-[11px] text-bone/45">No uses aqu� la API key del proveedor.</p>
+          </div>
+        </div>
+
+        <div className="flex flex-col gap-2 border-t border-bone/10 pt-3 sm:flex-row sm:items-center sm:justify-between">
+          <div className="min-w-0">
+            <p className="text-xs text-bone/65">Si Hermes usa una variable, su valor debe ser la clave completa que copiaste:</p>
+            <code className="mt-1 block break-all font-mono text-[11px] text-bone">{HERMES_KEY_ENV}=ath_live_.</code>
+            <p className="mt-1 text-[10px] text-bone/40">Gu�rdala en el .env de Hermes. El texto <code className="text-bone/60">{`\${${HERMES_KEY_ENV}}`}</code> en su configuraci�n solo referencia esa variable.</p>
+          </div>
+          <button type="button" onClick={() => void copySetupValue(HERMES_KEY_ENV, "nombre de variable", "variable")} aria-label="Copiar nombre de variable para Hermes" className="flex shrink-0 items-center justify-center gap-2 border border-bone/20 px-3 py-2 font-mono text-[10px] uppercase text-bone/70 hover:border-electric hover:text-electric">
+            {copiedSetup === "variable" ? <Check size={12} /> : <Copy size={12} />} Copiar variable
+          </button>
+        </div>
       </div>
 
       <form onSubmit={createKey} className="flex flex-col sm:flex-row gap-2">
@@ -228,3 +293,4 @@ export function GatewayApiKeysPanel() {
     </section>
   );
 }
+
