@@ -1,7 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { isAuthorized, isRecoverySession } from "../../lib/auth";
 import { loadAdapter } from "../../lib/storage-adapter";
-import { getUnifiedModelGroups } from "../../lib/proxy/model-groups";
+import { getTokensWithDiscoveredModels, getUnifiedModelGroups } from "../../lib/proxy/model-groups";
 import { listGatewayApiKeys } from "../../lib/gateway-keys";
 
 const SNAPSHOT_LIMIT_PER_TOKEN = 300;
@@ -24,7 +24,7 @@ export const Route = createFileRoute("/api/gateway-model-usage")({
 
         try {
           const adapter = await loadAdapter();
-          const tokens = await adapter.getTokens();
+          const tokens = await getTokensWithDiscoveredModels(await adapter.getTokens());
           const groups = getUnifiedModelGroups(tokens, true);
           const tokenIds = [...new Set(tokens.map((token) => token.id))];
           const snapshotResults = await Promise.all(

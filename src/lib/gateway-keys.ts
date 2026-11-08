@@ -1,6 +1,6 @@
 import { loadAdapter } from "./storage-adapter";
 import { decrypt, encrypt } from "./crypto";
-import { getUnifiedModelGroups } from "./proxy/model-groups";
+import { getProviderModelId, getTokensWithDiscoveredModels, getUnifiedModelGroups, isRoutableModel } from "./proxy/model-groups";
 
 const SETTING_KEY = "gateway_api_keys_v1";
 const KEY_PREFIX = "ath_live_";
@@ -155,13 +155,28 @@ export async function testGatewayApiKeyConnection(
   if (!identity) return { valid: false, modelCount: 0, activeProviderCount: 0 };
 
   const adapter = await loadAdapter();
-  const tokens = (await adapter.getTokens()).filter((token) => token.active);
-  const modelIds = new Set(tokens.flatMap((token) => token.selectedModels ?? []));
-  for (const group of getUnifiedModelGroups(tokens)) modelIds.add(group.id);
+  const tokens = await getTokensWithDiscoveredModels(await adapter.getTokens());
+  const availableTokens = tokens.filter(
+    (token) =>
+      token.active &&
+      !(typeof token.maxUsd === "number" && token.maxUsd > 0 && token.totalCost >= token.maxUsd)
+  );
+  const groups = getUnifiedModelGroups(availableTokens);
+  const groupedRoutes = new Set(
+    groups.flatMap((group) => group.routes.map((route) => `${route.token.id}:${route.upstreamModel.toLowerCase()}`))
+  );
+  const modelIds = new Set<string>(groups.map((group) => group.id));
+  for (const token of availableTokens) {
+    for (const model of token.selectedModels ?? []) {
+      if (!isRoutableModel(model, token.provider)) continue;
+      if (groupedRoutes.has(`${token.id}:${model.trim().toLowerCase()}`)) continue;
+      modelIds.add(getProviderModelId(token.provider, model));
+    }
+  }
   return {
     valid: true,
     modelCount: modelIds.size,
-    activeProviderCount: new Set(tokens.map((token) => token.provider)).size,
+    activeProviderCount: new Set(availableTokens.map((token) => token.provider)).size,
   };
 }
 

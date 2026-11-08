@@ -7,7 +7,7 @@ import { resolveCascadeModel } from "./router";
 import { selectPooledToken } from "./pool";
 import { checkAgentCircuitBreaker } from "./circuit-breaker";
 import { applyDlpToMessages } from "./dlp";
-import { getUnifiedModelGroups } from "./model-groups";
+import { getTokensWithDiscoveredModels, getUnifiedModelGroups, normalizeModelAlias } from "./model-groups";
 import { getGatewayApiKeyIdentity } from "../gateway-keys";
 
 export interface ProxyChatRequest {
@@ -130,6 +130,8 @@ export function buildTargetForToken(token: Token, modelRequested: string): Upstr
     url = "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions";
   } else if (p === "openai") {
     url = "https://api.openai.com/v1/chat/completions";
+  } else if (p === "opencode-zen") {
+    url = `${token.baseUrl?.replace(/\/+$/, "") || "https://opencode.ai/zen/v1"}/chat/completions`;
   } else if (p === "nvidia") {
     url = "https://integrate.api.nvidia.com/v1/chat/completions";
   } else if (p === "ollama") {
@@ -226,7 +228,7 @@ export async function resolveUpstreamTarget(
   messages?: Array<{ role: string; content: any }>
 ): Promise<UpstreamTarget> {
   const adapter = await loadAdapter();
-  const allTokens = await adapter.getTokens();
+  const allTokens = await getTokensWithDiscoveredModels(await adapter.getTokens());
 
   if (allTokens.length === 0) {
     throw new Error("No tokens registered in Agent Token Hub");
@@ -268,7 +270,7 @@ export async function resolveUpstreamTarget(
   // exact model identifier; unrelated providers are never guessed as fallback.
   const unifiedAlias = cleanModel.match(/^ath\/(.+)$/i);
   if (unifiedAlias) {
-    const alias = unifiedAlias[1].split("/").filter(Boolean).at(-1)?.toLowerCase();
+    const alias = normalizeModelAlias(unifiedAlias[1]);
     const group = getUnifiedModelGroups(allTokens).find((candidate) => candidate.name === alias);
     if (!group) {
       throw new Error(`Unified model "${cleanModel}" is unavailable or has no matching providers`);
@@ -291,11 +293,31 @@ export async function resolveUpstreamTarget(
 
   // Check if model has a provider prefix, e.g. "groq/llama-3.3-70b" or "google/gemini-2.5-flash"
   if (!isUnifiedRoute && cleanModel.includes("/")) {
-    const [prefix, ...rest] = cleanModel.split("/");
-    const pooled = selectPooledToken(allTokens, prefix);
+    const requestedId = cleanModel;
+    const [prefix, ...rest] = requestedId.split("/");
+    const requestedModel = rest.join("/");
+    const providerCandidates = allTokens.filter((token) => {
+      if (!token.active || token.provider.toLowerCase() !== prefix.toLowerCase()) return false;
+      if (typeof token.maxUsd === "number" && token.maxUsd > 0 && token.totalCost >= token.maxUsd) return false;
+      return (token.selectedModels ?? []).some((model) =>
+        model.trim().toLowerCase() === requestedModel.toLowerCase() ||
+        model.trim().toLowerCase() === requestedId.toLowerCase()
+      );
+    });
+    const preferredProviderToken = providerCandidates.find(
+      (token) => token.id === matchingCredentialToken?.id
+    );
+    const pooled = preferredProviderToken ?? selectPooledToken(
+      providerCandidates.length ? providerCandidates : allTokens,
+      prefix
+    );
     if (pooled) {
       selectedToken = pooled;
-      cleanModel = rest.join("/");
+      cleanModel =
+        pooled.selectedModels?.find((model) =>
+          model.trim().toLowerCase() === requestedModel.toLowerCase() ||
+          model.trim().toLowerCase() === requestedId.toLowerCase()
+        ) ?? requestedModel;
     }
   }
 

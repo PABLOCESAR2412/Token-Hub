@@ -4,6 +4,12 @@ import { Check, Copy, KeyRound, Plus, Power, RefreshCw, Wifi } from "lucide-reac
 const HERMES_ENDPOINT = "https://token-hub-two.vercel.app/api/v1";
 const HERMES_KEY_ENV = "HERMES_CUSTOM_TOKEN_HUB_TWO_VERCEL_APP_API_KEY";
 
+interface GatewayModelEntry {
+  id: string;
+  providers?: string[];
+  unified?: boolean;
+}
+
 interface GatewayApiKeySummary {
   id: string;
   name: string;
@@ -31,6 +37,10 @@ export function GatewayApiKeysPanel() {
   const [notice, setNotice] = React.useState<string | null>(null);
   const [copied, setCopied] = React.useState(false);
   const [copiedSetup, setCopiedSetup] = React.useState<"endpoint" | "variable" | null>(null);
+  const [models, setModels] = React.useState<GatewayModelEntry[]>([]);
+  const [modelsLoading, setModelsLoading] = React.useState(true);
+  const [modelsError, setModelsError] = React.useState<string | null>(null);
+  const [copiedModel, setCopiedModel] = React.useState<string | null>(null);
 
   const loadKeys = React.useCallback(async () => {
     setLoading(true);
@@ -50,6 +60,25 @@ export function GatewayApiKeysPanel() {
   React.useEffect(() => {
     void loadKeys();
   }, [loadKeys]);
+
+  React.useEffect(() => {
+    let cancelled = false;
+    fetch("/api/v1/models", { cache: "no-store" })
+      .then(async (response) => {
+        if (!response.ok) throw new Error(await responseError(response));
+        return response.json();
+      })
+      .then((body) => {
+        if (!cancelled) setModels(Array.isArray(body.data) ? body.data : []);
+      })
+      .catch((err) => {
+        if (!cancelled) setModelsError(err instanceof Error ? err.message : "No se pudo cargar el catálogo.");
+      })
+      .finally(() => {
+        if (!cancelled) setModelsLoading(false);
+      });
+    return () => { cancelled = true; };
+  }, []);
 
   const copySecret = async (secret: string, successMessage: string) => {
     try {
@@ -153,6 +182,18 @@ export function GatewayApiKeysPanel() {
     if (newKey) await copySecret(newKey, "API key copiada al portapapeles.");
   };
 
+  const copyModelId = async (modelId: string) => {
+    try {
+      await navigator.clipboard.writeText(modelId);
+      setCopiedModel(modelId);
+      setNotice("Modelo copiado: " + modelId);
+      setError(null);
+      window.setTimeout(() => setCopiedModel(null), 1800);
+    } catch {
+      setError("No se pudo copiar el ID del modelo. Selecciónalo y cópialo manualmente.");
+    }
+  };
+
   const copySetupValue = async (value: string, label: string, slot: "endpoint" | "variable") => {
     try {
       await navigator.clipboard.writeText(value);
@@ -161,7 +202,7 @@ export function GatewayApiKeysPanel() {
       setCopiedSetup(slot);
       window.setTimeout(() => setCopiedSetup(null), 1800);
     } catch {
-      setError(`No se pudo copiar ${label.toLowerCase()}. Selecciona el valor y c�pialo manualmente.`);
+      setError(`No se pudo copiar ${label.toLowerCase()}. Selecciona el valor y cópialo manualmente.`);
     }
   };
 
@@ -184,9 +225,9 @@ export function GatewayApiKeysPanel() {
       <div className="space-y-3 border border-electric/25 bg-electric/[0.04] p-4">
         <div>
           <div className="flex items-center gap-2 font-mono text-xs uppercase tracking-wider text-electric">
-            <KeyRound size={13} /> [ CONFIGURACI�N PARA HERMES ]
+            <KeyRound size={13} /> [ CONFIGURACIÓN PARA HERMES ]
           </div>
-          <p className="mt-1 text-xs text-bone/55">Copia estos valores en Configuraci�n  Proveedores  Endpoint personalizado.</p>
+          <p className="mt-1 text-xs text-bone/55">Copia estos valores en Configuración → Proveedores → Endpoint personalizado.</p>
         </div>
 
         <div className="grid gap-3 md:grid-cols-2">
@@ -205,16 +246,38 @@ export function GatewayApiKeysPanel() {
             <code className="mt-1 block text-xs text-bone">Chat Completions</code>
           </div>
 
-          <div className="border border-bone/10 bg-pure/40 p-3">
-            <div className="font-mono text-[10px] uppercase tracking-wider text-bone/40">Modelo predeterminado</div>
-            <div className="mt-1 text-xs text-bone">Elige el ID exacto de un modelo activo del Hub.</div>
-            <code className="mt-1 block text-[11px] text-electric">Ejemplo: jev/jev-0a14</code>
+          <div className="border border-bone/10 bg-pure/40 p-3 md:col-span-2">
+            <div className="font-mono text-[10px] uppercase tracking-wider text-bone/40">Modelo predeterminado en Hermes</div>
+            <p className="mt-1 text-xs text-bone/65">
+              Copia un ID de esta lista. Los modelos <code className="text-electric">ath/...</code> agrupan el mismo modelo entre proveedores activos y permiten failover.
+            </p>
+            <div className="mt-2 max-h-52 space-y-1 overflow-y-auto pr-1">
+              {modelsLoading ? (
+                <div className="py-2 font-mono text-[11px] text-bone/40">Cargando modelos activos...</div>
+              ) : modelsError ? (
+                <div className="py-2 font-mono text-[11px] text-red-300">{modelsError}</div>
+              ) : models.length === 0 ? (
+                <div className="py-2 font-mono text-[11px] text-bone/40">No hay modelos configurados en tokens activos.</div>
+              ) : models.map((model) => (
+                <div key={model.id} className="flex flex-col gap-1 border border-bone/10 bg-pure/30 px-2 py-1.5 sm:flex-row sm:items-center sm:justify-between">
+                  <code className="break-all text-[11px] text-electric">{model.id}</code>
+                  <div className="flex shrink-0 items-center gap-2">
+                    <span className="font-mono text-[9px] uppercase text-bone/40">
+                      {model.unified ? "Centralizado" : "Proveedor"}: {(model.providers ?? []).join(" + ") || "—"}
+                    </span>
+                    <button type="button" onClick={() => void copyModelId(model.id)} aria-label={"Copiar modelo " + model.id} className="border border-electric/25 px-2 py-1 font-mono text-[9px] uppercase text-electric hover:bg-electric/10">
+                      {copiedModel === model.id ? <Check size={11} /> : <Copy size={11} />} Copiar
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
           </div>
 
           <div className="border border-bone/10 bg-pure/40 p-3">
             <div className="font-mono text-[10px] uppercase tracking-wider text-bone/40">Clave API</div>
-            <p className="mt-1 text-xs text-bone">Usa una clave <strong className="text-emerald-300">Activa</strong> de esta lista. C�piala con el bot�n de la clave; empieza con <code className="text-electric">ath_live_</code>.</p>
-            <p className="mt-1 text-[11px] text-bone/45">No uses aqu� la API key del proveedor.</p>
+            <p className="mt-1 text-xs text-bone">Usa una clave <strong className="text-emerald-300">Activa</strong> de esta lista. Cópiala con el botón de la clave; empieza con <code className="text-electric">ath_live_</code>.</p>
+            <p className="mt-1 text-[11px] text-bone/45">No uses aquí la API key del proveedor.</p>
           </div>
         </div>
 
@@ -222,7 +285,7 @@ export function GatewayApiKeysPanel() {
           <div className="min-w-0">
             <p className="text-xs text-bone/65">Si Hermes usa una variable, su valor debe ser la clave completa que copiaste:</p>
             <code className="mt-1 block break-all font-mono text-[11px] text-bone">{HERMES_KEY_ENV}=ath_live_.</code>
-            <p className="mt-1 text-[10px] text-bone/40">Gu�rdala en el .env de Hermes. El texto <code className="text-bone/60">{`\${${HERMES_KEY_ENV}}`}</code> en su configuraci�n solo referencia esa variable.</p>
+            <p className="mt-1 text-[10px] text-bone/40">Guárdala en el .env de Hermes. El texto <code className="text-bone/60">{`\${${HERMES_KEY_ENV}}`}</code> en su configuración solo referencia esa variable.</p>
           </div>
           <button type="button" onClick={() => void copySetupValue(HERMES_KEY_ENV, "nombre de variable", "variable")} aria-label="Copiar nombre de variable para Hermes" className="flex shrink-0 items-center justify-center gap-2 border border-bone/20 px-3 py-2 font-mono text-[10px] uppercase text-bone/70 hover:border-electric hover:text-electric">
             {copiedSetup === "variable" ? <Check size={12} /> : <Copy size={12} />} Copiar variable

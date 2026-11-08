@@ -1,6 +1,11 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { loadAdapter } from "../../../lib/storage-adapter";
-import { getUnifiedModelGroups } from "../../../lib/proxy/model-groups";
+import {
+  getProviderModelId,
+  getTokensWithDiscoveredModels,
+  getUnifiedModelGroups,
+  isRoutableModel,
+} from "../../../lib/proxy/model-groups";
 import { isValidGatewayApiKey } from "../../../lib/gateway-keys";
 
 export const Route = createFileRoute("/api/v1/models")({
@@ -11,7 +16,7 @@ export const Route = createFileRoute("/api/v1/models")({
           const authHeader = request.headers.get("authorization");
           const cookieHeader = request.headers.get("cookie");
           const adapter = await loadAdapter();
-          const tokens = await adapter.getTokens();
+          const storedTokens = await adapter.getTokens();
 
           const rawKey = authHeader?.replace(/^Bearer\s+/i, "").trim() || "";
           const masterPassword = process.env.AUTH_PASSWORD?.trim();
@@ -36,17 +41,16 @@ export const Route = createFileRoute("/api/v1/models")({
 
           const hasValidTokenKey = Boolean(
             rawKey &&
-              tokens.some(
-                (t) =>
-                  t.slug === rawKey ||
-                  t.id === rawKey ||
-                  t.name.toLowerCase() === rawKey.toLowerCase() ||
-                  t.provider.toLowerCase() === rawKey.toLowerCase()
+              storedTokens.some(
+                (token) =>
+                  token.slug === rawKey ||
+                  token.id === rawKey ||
+                  token.name.toLowerCase() === rawKey.toLowerCase() ||
+                  token.provider.toLowerCase() === rawKey.toLowerCase()
               )
           );
 
           const isDemo = process.env.APP_MODE === "demo" && !masterPassword && !gatewayKey;
-
           if (!isMasterKey && !hasSession && !hasValidTokenKey && !isDemo) {
             return Response.json(
               {
@@ -56,70 +60,77 @@ export const Route = createFileRoute("/api/v1/models")({
                   code: "unauthorized",
                 },
               },
-              { status: 401 }
+              { status: 401, headers: { "Cache-Control": "no-store" } }
             );
           }
 
-          const modelsList: Array<{ id: string; object: string; created: number; owned_by: string }> = [];
+          const tokens = await getTokensWithDiscoveredModels(storedTokens);
+          const availableTokens = tokens.filter(
+            (token) =>
+              token.active &&
+              !(typeof token.maxUsd === "number" && token.maxUsd > 0 && token.totalCost >= token.maxUsd)
+          );
           const now = Math.floor(Date.now() / 1000);
+          const catalog = new Map<string, {
+            id: string;
+            object: string;
+            created: number;
+            owned_by: string;
+            providers: string[];
+            unified: boolean;
+          }>();
 
-          for (const t of tokens) {
-            if (!t.active) continue;
-            // Add provider namespace model
-            modelsList.push({
-              id: `${t.provider}/${t.slug}`,
+          const addModel = (model: {
+            id: string;
+            provider: string;
+            providers?: string[];
+            unified?: boolean;
+          }) => {
+            const previous = catalog.get(model.id);
+            const providers = [...new Set([...(previous?.providers ?? []), ...(model.providers ?? [model.provider])])].sort();
+            catalog.set(model.id, {
+              id: model.id,
               object: "model",
               created: now,
-              owned_by: t.provider,
+              owned_by: model.unified ? "agent-token-hub" : model.provider,
+              providers,
+              unified: Boolean(previous?.unified || model.unified),
             });
-            for (const model of t.selectedModels ?? []) {
-              modelsList.push({
-                id: `${t.provider}/${model}`,
-                object: "model",
-                created: now,
-                owned_by: t.provider,
+          };
+
+          const groups = getUnifiedModelGroups(availableTokens);
+          const groupedRoutes = new Set<string>();
+          for (const group of groups) {
+            addModel({
+              id: group.id,
+              provider: "agent-token-hub",
+              providers: [...new Set(group.routes.map((route) => route.token.provider))],
+              unified: true,
+            });
+            for (const route of group.routes) {
+              groupedRoutes.add(`${route.token.id}\u0000${route.upstreamModel.toLowerCase()}`);
+            }
+          }
+
+          for (const token of availableTokens) {
+            for (const model of new Set(token.selectedModels ?? [])) {
+              if (!isRoutableModel(model, token.provider)) continue;
+              if (groupedRoutes.has(`${token.id}\u0000${model.trim().toLowerCase()}`)) continue;
+              addModel({
+                id: getProviderModelId(token.provider, model),
+                provider: token.provider,
               });
             }
-            modelsList.push({
-              id: `${t.provider}/default`,
-              object: "model",
-              created: now,
-              owned_by: t.provider,
-            });
           }
 
-          // Publish aliases that have configured routes across multiple providers.
-          for (const group of getUnifiedModelGroups(tokens)) {
-            modelsList.push({
-              id: group.id,
-              object: "model",
-              created: now,
-              owned_by: "agent-token-hub",
-            });
-          }
-
-          // Common aliases
-          modelsList.push(
-            { id: "typesafe/jev-latest", object: "model", created: now, owned_by: "jev" },
-            { id: "typesafe/jev-1.14", object: "model", created: now, owned_by: "jev" },
-            { id: "typesafe/jev-router", object: "model", created: now, owned_by: "jev" },
-            { id: "google/gemini-4-argon", object: "model", created: now, owned_by: "google" },
-            { id: "deepseek/deepseek-chat", object: "model", created: now, owned_by: "deepseek" },
-            { id: "google/gemini-2.5-flash", object: "model", created: now, owned_by: "google" },
-            { id: "groq/llama-3.3-70b-versatile", object: "model", created: now, owned_by: "groq" },
-            { id: "openrouter/anthropic/claude-3.5-sonnet", object: "model", created: now, owned_by: "openrouter" }
+          return Response.json(
+            { object: "list", data: [...catalog.values()] },
+            { headers: { "Cache-Control": "no-store" } }
           );
-
-          const uniqueModelsList = [...new Map(modelsList.map((model) => [model.id, model])).values()];
-
-          return Response.json({
-            object: "list",
-            data: uniqueModelsList,
-          });
-        } catch (err: any) {
+        } catch {
           return Response.json(
             { error: { message: "Internal error while listing models" } },
-            { status: 500 }
+            { status: 500, headers: { "Cache-Control": "no-store" } }
           );
         }
       },
